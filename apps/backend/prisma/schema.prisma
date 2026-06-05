@@ -1,0 +1,273 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ENGINEER
+  PROJECT_MANAGER
+  ADMIN
+  DIRECTOR
+}
+
+enum StandupStatus {
+  SUBMITTED
+  BLOCKED
+  LATE
+}
+
+model User {
+  id            String                      @id @default(cuid())
+  email         String                      @unique
+  name          String
+  password      String
+  role          Role                        @default(ENGINEER)
+  teamId        String?
+  team          Team?                       @relation(fields: [teamId], references: [id])
+  avatar        String?
+  pushToken     String?
+  createdAt     DateTime                    @default(now())
+  updatedAt     DateTime                    @updatedAt
+
+  standups            Standup[]
+  comments            Comment[]
+  reactions           Reaction[]
+  notifications       Notification[]
+  connections         Connection[]              @relation("UserConnections")
+  connectedWith       Connection[]              @relation("ConnectedWith")
+  conversations       ConversationParticipant[]
+  sentMessages       Message[]
+  channelMessages     ChannelMessage[]
+  channelMemberships  ChannelMember[]
+
+  @@index([email])
+  @@index([teamId])
+}
+
+model Team {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  members     User[]
+  standups    Standup[]
+  sprints     Sprint[]
+  channels    Channel[]
+
+  @@index([name])
+}
+
+model Sprint {
+  id          String    @id @default(cuid())
+  name        String
+  startDate   DateTime
+  endDate     DateTime
+  teamId      String
+  team        Team      @relation(fields: [teamId], references: [id])
+  status      String    @default("active")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  milestones  Milestone[]
+
+  @@index([teamId])
+  @@index([status])
+}
+
+model Milestone {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  dueDate     DateTime
+  completed   Boolean   @default(false)
+  sprintId    String
+  sprint      Sprint    @relation(fields: [sprintId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([sprintId])
+}
+
+model Standup {
+  id            String        @id @default(cuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id])
+  teamId        String
+  team          Team          @relation(fields: [teamId], references: [id])
+  completed     String
+  focus         String
+  blockers      String?
+  isBlocked     Boolean       @default(false)
+  status        StandupStatus @default(SUBMITTED)
+  date          DateTime      @default(now())
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  comments      Comment[]
+  reactions     Reaction[]
+
+  @@index([userId])
+  @@index([teamId])
+  @@index([date])
+  @@index([isBlocked])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  standupId String
+  standup   Standup  @relation(fields: [standupId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([standupId])
+  @@index([userId])
+}
+
+model Reaction {
+  id        String   @id @default(cuid())
+  emoji     String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  standupId String
+  standup   Standup  @relation(fields: [standupId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([userId, standupId, emoji])
+  @@index([standupId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  type      String
+  title     String
+  message   String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([read])
+}
+
+model Bottleneck {
+  id          String   @id @default(cuid())
+  name        String
+  type        String
+  frequency   Int      @default(0)
+  description String?
+  teamId      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([teamId])
+  @@index([frequency])
+}
+
+model Connection {
+  id          String   @id @default(cuid())
+  requesterId String
+  requester   User     @relation("UserConnections", fields: [requesterId], references: [id])
+  receiverId  String
+  receiver    User     @relation("ConnectedWith", fields: [receiverId], references: [id])
+  status      String   @default("pending") // pending, accepted, rejected
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([requesterId, receiverId])
+  @@index([requesterId])
+  @@index([receiverId])
+  @@index([status])
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  type      String   @default("direct") // direct, group
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participants ConversationParticipant[]
+  messages    Message[]
+}
+
+model ConversationParticipant {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt     DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@unique([conversationId, userId])
+  @@index([conversationId])
+  @@index([userId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  content        String
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([createdAt])
+}
+
+model Channel {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  teamId      String
+  team        Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  messages    ChannelMessage[]
+  members     ChannelMember[]
+
+  @@index([teamId])
+}
+
+model ChannelMessage {
+  id        String   @id @default(cuid())
+  content   String
+  channelId String
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([channelId])
+  @@index([senderId])
+  @@index([createdAt])
+}
+
+model ChannelMember {
+  id        String   @id @default(cuid())
+  channelId String
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt  DateTime @default(now())
+
+  @@unique([channelId, userId])
+  @@index([channelId])
+  @@index([userId])
+}
