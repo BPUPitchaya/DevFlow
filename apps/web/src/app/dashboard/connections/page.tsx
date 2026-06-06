@@ -4,10 +4,15 @@ import { useEffect, useState } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { useAuthStore } from '@/lib/store';
 import { UserPlus, Check, X, Search } from 'lucide-react';
+import { useToast } from '@/components/Toast';
+import { getAvatarColor, getAvatarTextColor } from '@/lib/avatar';
+import { cn } from '@/lib/utils';
 
 interface Connection {
   id: string;
   status: string;
+  requesterId: string;
+  receiverId: string;
   requester: {
     id: string;
     name: string;
@@ -31,6 +36,7 @@ interface User {
 
 export default function ConnectionsPage() {
   const user = useAuthStore((state) => state.user);
+  const { showToast } = useToast();
   const [connections, setConnections] = useState<Connection[]>([]);
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,8 +86,10 @@ export default function ConnectionsPage() {
       setSearchQuery('');
       setShowSearch(false);
       loadConnections();
+      showToast('Connection request sent', 'success');
     } catch (error) {
       console.error('Failed to send request:', error);
+      showToast('Failed to send request', 'error');
     }
   };
 
@@ -93,8 +101,10 @@ export default function ConnectionsPage() {
         body: JSON.stringify({ status }),
       });
       loadConnections();
+      showToast(status === 'accepted' ? 'Connection accepted' : 'Connection rejected', 'success');
     } catch (error) {
       console.error('Failed to update connection:', error);
+      showToast('Failed to update connection', 'error');
     }
   };
 
@@ -104,8 +114,10 @@ export default function ConnectionsPage() {
         method: 'DELETE',
       });
       loadConnections();
+      showToast('Connection removed', 'success');
     } catch (error) {
       console.error('Failed to delete connection:', error);
+      showToast('Failed to remove connection', 'error');
     }
   };
 
@@ -200,8 +212,8 @@ export default function ConnectionsPage() {
                   className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm flex items-center justify-between"
                 >
                   <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                      <span className="text-sm font-medium text-gray-600">
+                    <div className={cn("w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center", getAvatarColor(connection.requester.name))}>
+                      <span className={cn("text-sm font-medium", getAvatarTextColor(getAvatarColor(connection.requester.name)))}>
                         {connection.requester.name.charAt(0)}
                       </span>
                     </div>
@@ -246,8 +258,8 @@ export default function ConnectionsPage() {
                   className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm flex items-center justify-between"
                 >
                   <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                      <span className="text-sm font-medium text-gray-600">
+                    <div className={cn("w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center", getAvatarColor(connection.receiver.name))}>
+                      <span className={cn("text-sm font-medium", getAvatarTextColor(getAvatarColor(connection.receiver.name)))}>
                         {connection.receiver.name.charAt(0)}
                       </span>
                     </div>
@@ -288,8 +300,8 @@ export default function ConnectionsPage() {
                     className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm"
                   >
                     <div className="flex items-center space-x-3 mb-3">
-                      <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
-                        <span className="text-sm font-medium text-gray-600">
+                      <div className={cn("w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center", getAvatarColor(connectedUser.name))}>
+                        <span className={cn("text-sm font-medium", getAvatarTextColor(getAvatarColor(connectedUser.name)))}>
                           {connectedUser.name.charAt(0)}
                         </span>
                       </div>

@@ -3,13 +3,18 @@
 import { useEffect, useState } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { useAuthStore } from '@/lib/store';
-import { MessageSquare, Hash, Plus, Search } from 'lucide-react';
+import { MessageSquare, Hash, Plus, Search, Smile } from 'lucide-react';
 import { subscribeToConversation, unsubscribeFromConversation, subscribeToChannel, unsubscribeFromChannel } from '@/lib/pusher';
+import { cn } from '@/lib/utils';
+import { useToast } from '@/components/Toast';
+import { getAvatarColor, getAvatarTextColor } from '@/lib/avatar';
+import { formatRelativeTime } from '@/lib/time';
 
 interface Conversation {
   id: string;
   type: string;
   name?: string;
+  unreadCount?: number;
   participants: {
     user: {
       id: string;
@@ -59,6 +64,8 @@ interface Channel {
 
 export default function MessagesPage() {
   const user = useAuthStore((state) => state.user);
+  const darkMode = useAuthStore((state) => state.darkMode);
+  const { showToast } = useToast();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,6 +79,8 @@ export default function MessagesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [newChannelName, setNewChannelName] = useState('');
   const [newChannelDescription, setNewChannelDescription] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [messageReactions, setMessageReactions] = useState<Record<string, any[]>>({});
 
   useEffect(() => {
     loadConversations();
@@ -141,8 +150,64 @@ export default function MessagesPage() {
       const response = await fetch(`/api/conversations/${conversationId}/messages`);
       const data = await response.json();
       setMessages(Array.isArray(data) ? data : []);
+      
+      // Load reactions for each message
+      if (Array.isArray(data)) {
+        for (const message of data) {
+          loadReactions(conversationId, message.id);
+        }
+      }
+      
+      // Update last read timestamp
+      try {
+        await fetch(`/api/conversations/${conversationId}/read`, {
+          method: 'POST',
+        });
+      } catch (error) {
+        console.error('Failed to update last read:', error);
+      }
     } catch (error) {
       console.error('Failed to load messages:', error);
+    }
+  };
+
+  const loadReactions = async (conversationId: string, messageId: string) => {
+    try {
+      const response = await fetch(`/api/conversations/${conversationId}/messages/${messageId}/reactions`);
+      const data = await response.json();
+      setMessageReactions(prev => ({
+        ...prev,
+        [messageId]: Array.isArray(data) ? data : []
+      }));
+    } catch (error) {
+      console.error('Failed to load reactions:', error);
+    }
+  };
+
+  const toggleReaction = async (messageId: string, emoji: string) => {
+    if (!selectedConversation) return;
+
+    try {
+      const response = await fetch(`/api/conversations/${selectedConversation.id}/messages/${messageId}/reactions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emoji }),
+      });
+      const data = await response.json();
+      
+      if (data.action === 'added') {
+        setMessageReactions(prev => ({
+          ...prev,
+          [messageId]: [...(prev[messageId] || []), data.reaction]
+        }));
+      } else {
+        setMessageReactions(prev => ({
+          ...prev,
+          [messageId]: (prev[messageId] || []).filter((r: any) => !(r.userId === user?.id && r.emoji === emoji))
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to toggle reaction:', error);
     }
   };
 
@@ -168,6 +233,7 @@ export default function MessagesPage() {
         });
         const data = await response.json();
         setMessages([...messages, data]);
+        showToast('Message sent', 'success');
       } else if (selectedChannel) {
         const response = await fetch(`/api/channels/${selectedChannel.id}/messages`, {
           method: 'POST',
@@ -176,10 +242,12 @@ export default function MessagesPage() {
         });
         const data = await response.json();
         setMessages([...messages, data]);
+        showToast('Message sent', 'success');
       }
       setNewMessage('');
     } catch (error) {
       console.error('Failed to send message:', error);
+      showToast('Failed to send message', 'error');
     }
   };
 
@@ -198,9 +266,13 @@ export default function MessagesPage() {
         setShowNewChannel(false);
         setNewChannelName('');
         setNewChannelDescription('');
+        showToast('Channel created', 'success');
+      } else {
+        showToast('Failed to create channel', 'error');
       }
     } catch (error) {
       console.error('Failed to create channel:', error);
+      showToast('Failed to create channel', 'error');
     }
   };
 
@@ -210,6 +282,43 @@ export default function MessagesPage() {
       (p) => p.user.id !== user?.id
     );
     return otherParticipant?.user.name || 'Unknown';
+  };
+
+  const searchUsers = async (query: string) => {
+    if (!query) {
+      setSearchResults([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/users/search?q=${encodeURIComponent(query)}`);
+      const data = await response.json();
+      setSearchResults(Array.isArray(data) ? data.filter((u: any) => u.id !== user?.id) : []);
+    } catch (error) {
+      console.error('Failed to search users:', error);
+    }
+  };
+
+  const startConversation = async (participantId: string) => {
+    try {
+      const response = await fetch('/api/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'direct',
+          participantIds: [participantId],
+        }),
+      });
+      const data = await response.json();
+      loadConversations();
+      setSelectedConversation(data);
+      setShowNewConversation(false);
+      setSearchResults([]);
+      setSearchQuery('');
+      loadMessages(data.id);
+    } catch (error) {
+      console.error('Failed to start conversation:', error);
+    }
   };
 
   if (loading) {
@@ -226,27 +335,31 @@ export default function MessagesPage() {
     <DashboardLayout activeTab="messages">
       <div className="flex h-[calc(100vh-8rem)] gap-6">
         {/* Sidebar */}
-        <div className="w-80 bg-white rounded-lg border border-gray-200 flex flex-col">
-          <div className="p-4 border-b border-gray-200">
+        <div className={cn("w-80 rounded-lg border flex flex-col", darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200")}>
+          <div className={cn("p-4 border-b", darkMode ? "border-gray-700" : "border-gray-200")}>
             <div className="flex space-x-2 mb-4">
               <button
                 onClick={() => setActiveTab('direct')}
-                className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition ${
+                className={cn("flex-1 py-2 px-3 rounded-lg text-sm font-medium transition", 
                   activeTab === 'direct'
                     ? 'bg-gray-900 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                    : darkMode
+                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                )}
               >
                 <MessageSquare className="w-4 h-4 inline mr-2" />
                 Direct
               </button>
               <button
                 onClick={() => setActiveTab('channels')}
-                className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition ${
+                className={cn("flex-1 py-2 px-3 rounded-lg text-sm font-medium transition",
                   activeTab === 'channels'
                     ? 'bg-gray-900 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                    : darkMode
+                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                )}
               >
                 <Hash className="w-4 h-4 inline mr-2" />
                 Channels
@@ -254,13 +367,17 @@ export default function MessagesPage() {
             </div>
 
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Search className={cn("absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4", darkMode ? "text-gray-500" : "text-gray-400")} />
               <input
                 type="text"
                 placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
+                className={cn("w-full pl-9 pr-4 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500",
+                  darkMode
+                    ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                    : "border-gray-300"
+                )}
               />
             </div>
           </div>
@@ -270,24 +387,49 @@ export default function MessagesPage() {
               <>
                 <button
                   onClick={() => setShowNewConversation(!showNewConversation)}
-                  className="w-full flex items-center space-x-2 p-3 rounded-lg hover:bg-gray-100 transition text-gray-700"
+                  className={cn("w-full flex items-center space-x-2 p-3 rounded-lg transition", darkMode ? "text-gray-300 hover:bg-gray-700" : "text-gray-700 hover:bg-gray-100")}
                 >
                   <Plus className="w-4 h-4" />
                   <span className="text-sm">New Message</span>
                 </button>
 
                 {showNewConversation && (
-                  <div className="p-3 bg-gray-50 rounded-lg mb-2">
+                  <div className={cn("p-3 rounded-lg mb-2 space-y-2", darkMode ? "bg-gray-700" : "bg-gray-50")}>
                     <input
                       type="text"
-                      placeholder="Enter user email..."
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          // TODO: Search and add user
-                        }
+                      placeholder="Search users by name or email..."
+                      value={searchQuery}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        searchUsers(e.target.value);
                       }}
+                      className={cn("w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500",
+                        darkMode
+                          ? "bg-gray-600 border-gray-500 text-white placeholder-gray-400"
+                          : "border-gray-300"
+                      )}
                     />
+                    {searchResults.length > 0 && (
+                      <div className="max-h-48 overflow-y-auto space-y-1">
+                        {searchResults.map((searchUser) => (
+                          <button
+                            key={searchUser.id}
+                            onClick={() => startConversation(searchUser.id)}
+                            className={cn("w-full flex items-center space-x-2 p-2 rounded transition text-left", darkMode ? "hover:bg-gray-600" : "hover:bg-gray-100")}
+                          >
+                            <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", getAvatarColor(searchUser.name))}>
+                              <span className={cn("text-xs font-medium", getAvatarTextColor(getAvatarColor(searchUser.name)))}>
+                                {searchUser.name.charAt(0)}
+                              </span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className={cn("text-sm font-medium truncate", darkMode ? "text-white" : "text-gray-900")}>{searchUser.name}</p>
+                              <p className={cn("text-xs truncate", darkMode ? "text-gray-400" : "text-gray-500")}>{searchUser.email}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -299,26 +441,31 @@ export default function MessagesPage() {
                       setSelectedChannel(null);
                       loadMessages(conversation.id);
                     }}
-                    className={`w-full text-left p-3 rounded-lg transition ${
+                    className={cn("w-full text-left p-3 rounded-lg transition",
                       selectedConversation?.id === conversation.id
-                        ? 'bg-gray-100'
-                        : 'hover:bg-gray-50'
-                    }`}
+                        ? darkMode ? "bg-gray-700" : "bg-gray-100"
+                        : darkMode ? "hover:bg-gray-700" : "hover:bg-gray-50"
+                    )}
                   >
                     <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                        <span className="text-sm font-medium text-gray-600">
+                      <div className={cn("w-10 h-10 rounded-full flex items-center justify-center", getAvatarColor(getConversationName(conversation)))}>
+                        <span className={cn("text-sm font-medium", getAvatarTextColor(getAvatarColor(getConversationName(conversation))))}>
                           {getConversationName(conversation).charAt(0)}
                         </span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 text-sm truncate">
+                        <p className={cn("font-medium text-sm truncate", darkMode ? "text-white" : "text-gray-900")}>
                           {getConversationName(conversation)}
                         </p>
-                        <p className="text-xs text-gray-500 truncate">
+                        <p className={cn("text-xs truncate", darkMode ? "text-gray-400" : "text-gray-500")}>
                           {conversation.messages[0]?.sender.name}: {conversation.messages[0]?.content || 'No messages'}
                         </p>
                       </div>
+                      {conversation.unreadCount && conversation.unreadCount > 0 && (
+                        <div className="bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                          {conversation.unreadCount > 9 ? '9+' : conversation.unreadCount}
+                        </div>
+                      )}
                     </div>
                   </button>
                 ))}
@@ -327,27 +474,35 @@ export default function MessagesPage() {
               <>
                 <button
                   onClick={() => setShowNewChannel(!showNewChannel)}
-                  className="w-full flex items-center space-x-2 p-3 rounded-lg hover:bg-gray-100 transition text-gray-700"
+                  className={cn("w-full flex items-center space-x-2 p-3 rounded-lg transition", darkMode ? "text-gray-300 hover:bg-gray-700" : "text-gray-700 hover:bg-gray-100")}
                 >
                   <Plus className="w-4 h-4" />
                   <span className="text-sm">New Channel</span>
                 </button>
 
                 {showNewChannel && (
-                  <div className="p-3 bg-gray-50 rounded-lg mb-2 space-y-2">
+                  <div className={cn("p-3 rounded-lg mb-2 space-y-2", darkMode ? "bg-gray-700" : "bg-gray-50")}>
                     <input
                       type="text"
                       placeholder="Channel name"
                       value={newChannelName}
                       onChange={(e) => setNewChannelName(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      className={cn("w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500",
+                        darkMode
+                          ? "bg-gray-600 border-gray-500 text-white placeholder-gray-400"
+                          : "border-gray-300"
+                      )}
                     />
                     <input
                       type="text"
                       placeholder="Description (optional)"
                       value={newChannelDescription}
                       onChange={(e) => setNewChannelDescription(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      className={cn("w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500",
+                        darkMode
+                          ? "bg-gray-600 border-gray-500 text-white placeholder-gray-400"
+                          : "border-gray-300"
+                      )}
                     />
                     <button
                       onClick={createChannel}
@@ -366,19 +521,19 @@ export default function MessagesPage() {
                       setSelectedConversation(null);
                       loadChannelMessages(channel.id);
                     }}
-                    className={`w-full text-left p-3 rounded-lg transition ${
+                    className={cn("w-full text-left p-3 rounded-lg transition",
                       selectedChannel?.id === channel.id
-                        ? 'bg-gray-100'
-                        : 'hover:bg-gray-50'
-                    }`}
+                        ? darkMode ? "bg-gray-700" : "bg-gray-100"
+                        : darkMode ? "hover:bg-gray-700" : "hover:bg-gray-50"
+                    )}
                   >
                     <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <Hash className="w-5 h-5 text-blue-600" />
+                      <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", darkMode ? "bg-blue-900" : "bg-blue-100")}>
+                        <Hash className={cn("w-5 h-5", darkMode ? "text-blue-400" : "text-blue-600")} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 text-sm">{channel.name}</p>
-                        <p className="text-xs text-gray-500 truncate">
+                        <p className={cn("font-medium text-sm", darkMode ? "text-white" : "text-gray-900")}>{channel.name}</p>
+                        <p className={cn("text-xs truncate", darkMode ? "text-gray-400" : "text-gray-500")}>
                           {channel.messages[0]?.sender.name}: {channel.messages[0]?.content || 'No messages'}
                         </p>
                       </div>
@@ -391,11 +546,11 @@ export default function MessagesPage() {
         </div>
 
         {/* Chat Area */}
-        <div className="flex-1 bg-white rounded-lg border border-gray-200 flex flex-col">
+        <div className={cn("flex-1 rounded-lg border flex flex-col", darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200")}>
           {(selectedConversation || selectedChannel) ? (
             <>
-              <div className="p-4 border-b border-gray-200">
-                <h3 className="font-semibold text-gray-900">
+              <div className={cn("p-4 border-b", darkMode ? "border-gray-700" : "border-gray-200")}>
+                <h3 className={cn("font-semibold", darkMode ? "text-white" : "text-gray-900")}>
                   {selectedConversation
                     ? getConversationName(selectedConversation)
                     : selectedChannel?.name}
@@ -409,25 +564,46 @@ export default function MessagesPage() {
                     className={`flex ${message.senderId === user?.id ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
-                      className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                      className={cn("max-w-xs lg:max-w-md px-4 py-2 rounded-lg",
                         message.senderId === user?.id
-                          ? 'bg-gray-900 text-white'
-                          : 'bg-gray-100 text-gray-900'
-                      }`}
+                          ? "bg-gray-900 text-white"
+                          : darkMode ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900"
+                      )}
                     >
                       <p className="text-sm">{message.content}</p>
                       <p className="text-xs mt-1 opacity-70">
-                        {new Date(message.createdAt).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                        {formatRelativeTime(message.createdAt)}
                       </p>
+                      
+                      {/* Reactions */}
+                      {messageReactions[message.id] && messageReactions[message.id].length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {messageReactions[message.id].map((reaction: any) => (
+                            <span
+                              key={reaction.id}
+                              className="text-xs px-2 py-1 rounded-full bg-white/20"
+                              title={reaction.user.name}
+                            >
+                              {reaction.emoji}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {/* Reaction button */}
+                      <button
+                        onClick={() => toggleReaction(message.id, '👍')}
+                        className="mt-2 text-xs opacity-50 hover:opacity-100 transition"
+                        title="React"
+                      >
+                        <Smile className="w-4 h-4 inline" />
+                      </button>
                     </div>
                   </div>
                 ))}
               </div>
 
-              <div className="p-4 border-t border-gray-200">
+              <div className={cn("p-4 border-t", darkMode ? "border-gray-700" : "border-gray-200")}>
                 <div className="flex space-x-2">
                   <input
                     type="text"
@@ -435,7 +611,11 @@ export default function MessagesPage() {
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
                     placeholder="Type a message..."
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                    className={cn("flex-1 px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500",
+                      darkMode
+                        ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400"
+                        : "border-gray-300"
+                    )}
                   />
                   <button
                     onClick={sendMessage}
@@ -447,8 +627,8 @@ export default function MessagesPage() {
               </div>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-gray-500">
-              <p>Select a conversation or channel to start messaging</p>
+            <div className="flex-1 flex items-center justify-center">
+              <p className={darkMode ? "text-gray-400" : "text-gray-500"}>Select a conversation or channel to start messaging</p>
             </div>
           )}
         </div>
