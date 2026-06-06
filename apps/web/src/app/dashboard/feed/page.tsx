@@ -29,62 +29,91 @@ export default function FeedPage() {
   const [standups, setStandups] = useState<Standup[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Mock data for demo
+  const mockStandups: Standup[] = [
+    {
+      id: '1',
+      completed: 'Finished the user authentication module and fixed the login bug',
+      focus: 'Working on the dashboard analytics feature',
+      blockers: 'Waiting for API documentation from backend team',
+      isBlocked: true,
+      date: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      user: { id: 'u1', name: 'John Doe', avatar: undefined },
+      comments: [
+        { id: 'c1', user: { name: 'Jane Smith' }, content: 'I can help with the API docs!' }
+      ],
+      reactions: [
+        { id: 'r1', emoji: '👍', user: { name: 'Jane Smith' } },
+        { id: 'r2', emoji: '❤️', user: { name: 'Bob Wilson' } }
+      ]
+    },
+    {
+      id: '2',
+      completed: 'Completed the messaging UI and added real-time updates',
+      focus: 'Adding message search and threading features',
+      blockers: undefined,
+      isBlocked: false,
+      date: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+      user: { id: 'u2', name: 'Jane Smith', avatar: undefined },
+      comments: [],
+      reactions: [
+        { id: 'r3', emoji: '🎉', user: { name: 'John Doe' } }
+      ]
+    },
+    {
+      id: '3',
+      completed: 'Fixed the database migration issue and updated the schema',
+      focus: 'Optimizing database queries for better performance',
+      blockers: undefined,
+      isBlocked: false,
+      date: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+      user: { id: 'u3', name: 'Bob Wilson', avatar: undefined },
+      comments: [
+        { id: 'c2', user: { name: 'John Doe' }, content: 'Great work on the migration!' }
+      ],
+      reactions: []
+    },
+    {
+      id: '4',
+      completed: 'Deployed the staging environment and ran integration tests',
+      focus: 'Preparing for production deployment',
+      blockers: 'Need to fix a critical bug in the payment module',
+      isBlocked: true,
+      date: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+      user: { id: 'u1', name: 'John Doe', avatar: undefined },
+      comments: [],
+      reactions: [
+        { id: 'r4', emoji: '🚀', user: { name: 'Jane Smith' } },
+        { id: 'r5', emoji: '👍', user: { name: 'Bob Wilson' } }
+      ]
+    }
+  ];
+
   useEffect(() => {
-    loadStandups();
+    // Load mock data
+    setStandups(mockStandups);
+    setLoading(false);
   }, []);
 
-  useEffect(() => {
-    if (user?.team?.id) {
-      const channel = subscribeToTeam(user.team.id, {
-        onStandupUpdate: (data) => {
-          setStandups((prev) => [data, ...prev]);
-        },
-        onBlockerAlert: (data) => {
-          setStandups((prev) => [data, ...prev]);
-        },
-        onCommentAdded: (data) => {
-          setStandups((prev) =>
-            prev.map((s) =>
-              s.id === data.standupId
-                ? { ...s, comments: [...s.comments, data] }
-                : s
-            )
-          );
-        },
-      });
+  // Disable Pusher for demo
+  useEffect(() => {}, [user]);
 
-      return () => {
-        channel.unbind_all();
-        channel.unsubscribe();
-      };
-    }
-  }, [user]);
-
-  const loadStandups = async () => {
-    try {
-      const response = await standupsApi.getStandups({ teamId: user?.team?.id });
-      setStandups(response.data);
-    } catch (error) {
-      console.error('Failed to load standups:', error);
-    } finally {
-      setLoading(false);
-    }
+  const loadStandups = () => {};
+  const handleAddComment = (standupId: string, content: string) => {
+    // Mock implementation
+    setStandups(prev => prev.map(s => 
+      s.id === standupId 
+        ? { ...s, comments: [...s.comments, { id: `c${Date.now()}`, user: { name: 'You' }, content }] }
+        : s
+    ));
   };
-
-  const handleAddComment = async (standupId: string, content: string) => {
-    try {
-      await standupsApi.addComment(standupId, content);
-    } catch (error) {
-      console.error('Failed to add comment:', error);
-    }
-  };
-
-  const handleAddReaction = async (standupId: string, emoji: string) => {
-    try {
-      await standupsApi.addReaction(standupId, emoji);
-    } catch (error) {
-      console.error('Failed to add reaction:', error);
-    }
+  const handleAddReaction = (standupId: string, emoji: string) => {
+    // Mock implementation
+    setStandups(prev => prev.map(s => 
+      s.id === standupId 
+        ? { ...s, reactions: [...s.reactions, { id: `r${Date.now()}`, emoji, user: { name: 'You' } }] }
+        : s
+    ));
   };
 
   if (loading) {
@@ -172,7 +201,7 @@ export default function FeedPage() {
                         const comment = prompt('Add a comment:');
                         if (comment) handleAddComment(standup.id, comment);
                       }}
-                      className="flex items-center space-x-1 text-gray-500 hover:text-gray-700 text-sm"
+                      className="flex items-center space-x-1 text-gray-500 hover:text-gray-900 text-sm"
                     >
                       <MessageCircle className="w-4 h-4" />
                       <span>{standup.comments.length}</span>
@@ -180,7 +209,7 @@ export default function FeedPage() {
 
                     <button
                       onClick={() => handleAddReaction(standup.id, '👍')}
-                      className="flex items-center space-x-1 text-gray-500 hover:text-gray-700 text-sm"
+                      className="flex items-center space-x-1 text-gray-500 hover:text-gray-900 text-sm"
                     >
                       <Heart className="w-4 h-4" />
                       <span>{standup.reactions.length}</span>

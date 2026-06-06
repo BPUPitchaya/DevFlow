@@ -22,25 +22,61 @@ export default function AnalyticsPage() {
   const [bottleneckData, setBottleneckData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Mock data for demo
+  const mockVelocityData = [
+    { date: 'May 1', total: 12, blocked: 2, uniqueUsers: 5 },
+    { date: 'May 2', total: 15, blocked: 1, uniqueUsers: 6 },
+    { date: 'May 3', total: 14, blocked: 3, uniqueUsers: 5 },
+    { date: 'May 4', total: 18, blocked: 0, uniqueUsers: 6 },
+    { date: 'May 5', total: 16, blocked: 2, uniqueUsers: 5 },
+    { date: 'May 6', total: 20, blocked: 1, uniqueUsers: 6 },
+    { date: 'May 7', total: 19, blocked: 0, uniqueUsers: 5 },
+    { date: 'May 8', total: 22, blocked: 3, uniqueUsers: 6 },
+    { date: 'May 9', total: 21, blocked: 1, uniqueUsers: 5 },
+    { date: 'May 10', total: 24, blocked: 2, uniqueUsers: 6 },
+    { date: 'May 11', total: 23, blocked: 0, uniqueUsers: 5 },
+    { date: 'May 12', total: 25, blocked: 1, uniqueUsers: 6 },
+    { date: 'May 13', total: 26, blocked: 2, uniqueUsers: 5 },
+    { date: 'May 14', total: 28, blocked: 0, uniqueUsers: 6 },
+    { date: 'May 15', total: 27, blocked: 1, uniqueUsers: 5 },
+    { date: 'May 16', total: 30, blocked: 2, uniqueUsers: 6 },
+    { date: 'May 17', total: 29, blocked: 0, uniqueUsers: 5 },
+    { date: 'May 18', total: 31, blocked: 1, uniqueUsers: 6 },
+    { date: 'May 19', total: 32, blocked: 2, uniqueUsers: 5 },
+    { date: 'May 20', total: 33, blocked: 0, uniqueUsers: 6 },
+    { date: 'May 21', total: 34, blocked: 1, uniqueUsers: 5 },
+    { date: 'May 22', total: 35, blocked: 2, uniqueUsers: 6 },
+    { date: 'May 23', total: 36, blocked: 0, uniqueUsers: 5 },
+    { date: 'May 24', total: 37, blocked: 1, uniqueUsers: 6 },
+    { date: 'May 25', total: 38, blocked: 2, uniqueUsers: 5 },
+    { date: 'May 26', total: 39, blocked: 0, uniqueUsers: 6 },
+    { date: 'May 27', total: 40, blocked: 1, uniqueUsers: 5 },
+    { date: 'May 28', total: 41, blocked: 2, uniqueUsers: 6 },
+    { date: 'May 29', total: 42, blocked: 0, uniqueUsers: 5 },
+    { date: 'May 30', total: 43, blocked: 1, uniqueUsers: 6 },
+  ];
+
+  const mockBottleneckData = [
+    { name: 'API Documentation', frequency: 15 },
+    { name: 'Code Review', frequency: 12 },
+    { name: 'Deployment', frequency: 10 },
+    { name: 'Testing', frequency: 8 },
+    { name: 'Design Assets', frequency: 7 },
+    { name: 'Server Issues', frequency: 6 },
+    { name: 'Database', frequency: 5 },
+    { name: 'Third-party APIs', frequency: 4 },
+    { name: 'Communication', frequency: 3 },
+    { name: 'Requirements', frequency: 2 },
+  ];
+
   useEffect(() => {
-    loadAnalytics();
+    // Load mock data
+    setVelocityData(mockVelocityData);
+    setBottleneckData(mockBottleneckData);
+    setLoading(false);
   }, []);
 
-  const loadAnalytics = async () => {
-    try {
-      const [velocityResponse, bottleneckResponse] = await Promise.all([
-        analyticsApi.getVelocity({ teamId: user?.team?.id, days: 30 }),
-        analyticsApi.getBottlenecks({ teamId: user?.team?.id, days: 30 }),
-      ]);
-
-      setVelocityData(velocityResponse.data);
-      setBottleneckData(bottleneckResponse.data);
-    } catch (error) {
-      console.error('Failed to load analytics:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const loadAnalytics = () => {};
 
   if (loading) {
     return (

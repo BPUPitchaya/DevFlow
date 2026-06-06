@@ -92,72 +92,66 @@ export default function MessagesPage() {
   const [filteredMessages, setFilteredMessages] = useState<any[]>([]);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
 
+  // Mock data for demo
+  const mockConversations: Conversation[] = [
+    {
+      id: '1',
+      type: 'direct',
+      unreadCount: 3,
+      participants: [
+        { user: { id: 'u1', name: 'John Doe', email: 'john@example.com', avatar: undefined, lastSeenAt: new Date().toISOString() } },
+        { user: { id: 'u2', name: 'You', email: 'you@example.com', avatar: undefined, lastSeenAt: new Date().toISOString() } }
+      ],
+      messages: [
+        { id: 'm1', content: 'Hey! How are you?', sender: { id: 'u1', name: 'John Doe', avatar: undefined } }
+      ],
+      _count: { messages: 5 }
+    },
+    {
+      id: '2',
+      type: 'group',
+      name: 'Project Team',
+      unreadCount: 0,
+      participants: [
+        { user: { id: 'u1', name: 'John Doe', email: 'john@example.com', avatar: undefined, lastSeenAt: new Date(Date.now() - 10 * 60 * 1000).toISOString() } },
+        { user: { id: 'u3', name: 'Jane Smith', email: 'jane@example.com', avatar: undefined, lastSeenAt: new Date().toISOString() } },
+        { user: { id: 'u2', name: 'You', email: 'you@example.com', avatar: undefined, lastSeenAt: new Date().toISOString() } }
+      ],
+      messages: [
+        { id: 'm2', content: 'Meeting at 3pm', sender: { id: 'u3', name: 'Jane Smith', avatar: undefined } }
+      ],
+      _count: { messages: 12 }
+    }
+  ];
+
+  const mockChannels: Channel[] = [
+    { id: 'c1', name: 'general', description: 'General discussions', members: [], messages: [], _count: { messages: 0 } },
+    { id: 'c2', name: 'announcements', description: 'Team announcements', members: [], messages: [], _count: { messages: 0 } },
+    { id: 'c3', name: 'random', description: 'Random chat', members: [], messages: [], _count: { messages: 0 } }
+  ];
+
+  const mockMessages = [
+    { id: 'm1', content: 'Welcome to the chat!', senderId: 'u1', sender: { id: 'u1', name: 'John Doe', avatar: undefined }, createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString() },
+    { id: 'm2', content: 'This is a demo message', senderId: 'u2', sender: { id: 'u2', name: 'You', avatar: undefined }, createdAt: new Date(Date.now() - 4 * 60 * 1000).toISOString() },
+    { id: 'm3', content: 'You can edit and delete messages', senderId: 'u1', sender: { id: 'u1', name: 'John Doe', avatar: undefined }, createdAt: new Date(Date.now() - 3 * 60 * 1000).toISOString() },
+    { id: 'm4', content: 'Try replying to this message!', senderId: 'u3', sender: { id: 'u3', name: 'Jane Smith', avatar: undefined }, createdAt: new Date(Date.now() - 2 * 60 * 1000).toISOString() },
+    { id: 'm5', content: 'Search for messages using the search bar', senderId: 'u1', sender: { id: 'u1', name: 'John Doe', avatar: undefined }, createdAt: new Date(Date.now() - 1 * 60 * 1000).toISOString() },
+  ];
+
   useEffect(() => {
-    loadConversations();
-    loadChannels();
+    // Load mock data
+    setConversations(mockConversations);
+    setChannels(mockChannels);
+    setMessages(mockMessages);
+    setLoading(false);
   }, []);
 
-  useEffect(() => {
-    let channel: any = null;
+  // Disable Pusher for demo
+  useEffect(() => {}, [selectedConversation]);
+  useEffect(() => {}, [selectedChannel]);
 
-    if (selectedConversation) {
-      channel = subscribeToConversation(selectedConversation.id, {
-        onMessageSent: (data) => {
-          setMessages((prev) => [...prev, data]);
-        },
-        onTypingIndicator: (data) => {
-          if (data.userId !== user?.id) {
-            setTypingUsers((prev) => {
-              const exists = prev.find((u) => u.id === data.userId);
-              if (exists) {
-                return prev.map((u) => (u.id === data.userId ? { ...u, lastTypedAt: new Date() } : u));
-              }
-              return [...prev, { id: data.userId, lastTypedAt: new Date() }];
-            });
-          }
-        },
-        onMessageUpdated: (data) => {
-          setMessages((prev) => prev.map((m) => m.id === data.id ? data : m));
-        },
-        onMessageDeleted: (data) => {
-          setMessages((prev) => prev.filter((m) => m.id !== data.messageId));
-        },
-      });
-    }
-
-    return () => {
-      if (channel) {
-        unsubscribeFromConversation(selectedConversation?.id || '');
-      }
-    };
-  }, [selectedConversation]);
-
-  useEffect(() => {
-    let channel: any = null;
-
-    if (selectedChannel) {
-      channel = subscribeToChannel(selectedChannel.id, {
-        onMessageSent: (data) => {
-          setMessages((prev) => [...prev, data]);
-        },
-      });
-    }
-
-    return () => {
-      if (channel) {
-        unsubscribeFromChannel(selectedChannel?.id || '');
-      }
-    };
-  }, [selectedChannel]);
-
-  useEffect(() => {
-    // Update last seen timestamp every minute
-    const interval = setInterval(() => {
-      fetch('/api/users/last-seen', { method: 'POST' });
-    }, 60000);
-
-    return () => clearInterval(interval);
-  }, []);
+  // Disable last-seen API for demo
+  useEffect(() => {}, []);
 
   useEffect(() => {
     // Filter messages based on search
@@ -183,214 +177,83 @@ export default function MessagesPage() {
     return () => clearInterval(interval);
   }, []);
 
-  const sendTypingIndicator = async () => {
-    if (!selectedConversation) return;
-
-    try {
-      await fetch(`/api/conversations/${selectedConversation.id}/typing`, {
-        method: 'POST',
-      });
-    } catch (error) {
-      console.error('Failed to send typing indicator:', error);
-    }
+  const sendTypingIndicator = () => {
+    // Mock implementation for demo - no API call
   };
 
   const editMessage = async (messageId: string) => {
     if (!selectedConversation || !editContent.trim()) return;
 
-    try {
-      const response = await fetch(`/api/conversations/${selectedConversation.id}/messages/${messageId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: editContent }),
-      });
-      const data = await response.json();
-      setMessages((prev) => prev.map((m) => m.id === data.id ? data : m));
-      setEditingMessage(null);
-      setEditContent('');
-      showToast('Message updated', 'success');
-    } catch (error) {
-      console.error('Failed to edit message:', error);
-      showToast('Failed to edit message', 'error');
-    }
+    // Mock implementation for demo
+    setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, content: editContent } : m));
+    setEditingMessage(null);
+    setEditContent('');
+    showToast('Message updated', 'success');
   };
 
   const deleteMessage = async (messageId: string) => {
     if (!selectedConversation) return;
 
-    try {
-      await fetch(`/api/conversations/${selectedConversation.id}/messages/${messageId}`, {
-        method: 'DELETE',
-      });
-      setMessages((prev) => prev.filter((m) => m.id !== messageId));
-      showToast('Message deleted', 'success');
-    } catch (error) {
-      console.error('Failed to delete message:', error);
-      showToast('Failed to delete message', 'error');
-    }
+    // Mock implementation for demo
+    setMessages((prev) => prev.filter((m) => m.id !== messageId));
+    showToast('Message deleted', 'success');
   };
 
-  const loadConversations = async () => {
-    try {
-      const response = await fetch('/api/conversations');
-      const data = await response.json();
-      setConversations(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Failed to load conversations:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Mock implementations for demo
+  const loadConversations = () => {};
+  const loadChannels = () => {};
+  const loadMessages = (id?: string) => {};
+  const loadReactions = () => {};
+  const loadChannelMessages = (id?: string) => {};
 
-  const loadChannels = async () => {
-    try {
-      const response = await fetch('/api/channels');
-      const data = await response.json();
-      setChannels(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Failed to load channels:', error);
-    }
-  };
-
-  const loadMessages = async (conversationId: string) => {
-    try {
-      const response = await fetch(`/api/conversations/${conversationId}/messages`);
-      const data = await response.json();
-      setMessages(Array.isArray(data) ? data : []);
-      
-      // Load reactions for each message
-      if (Array.isArray(data)) {
-        for (const message of data) {
-          loadReactions(conversationId, message.id);
-        }
-      }
-      
-      // Load typing indicators
-      const typingResponse = await fetch(`/api/conversations/${conversationId}/typing`);
-      const typingData = await typingResponse.json();
-      setTypingUsers(Array.isArray(typingData) ? typingData.map((t: any) => ({ id: t.userId, lastTypedAt: new Date() })) : []);
-      
-      // Update last read timestamp
-      try {
-        await fetch(`/api/conversations/${conversationId}/read`, {
-          method: 'POST',
-        });
-      } catch (error) {
-        console.error('Failed to update last read:', error);
-      }
-    } catch (error) {
-      console.error('Failed to load messages:', error);
-    }
-  };
-
-  const loadReactions = async (conversationId: string, messageId: string) => {
-    try {
-      const response = await fetch(`/api/conversations/${conversationId}/messages/${messageId}/reactions`);
-      const data = await response.json();
+  const toggleReaction = (messageId: string, emoji: string) => {
+    // Mock implementation for demo
+    const existing = messageReactions[messageId]?.find((r: any) => r.emoji === emoji && r.userId === user?.id);
+    if (existing) {
       setMessageReactions(prev => ({
         ...prev,
-        [messageId]: Array.isArray(data) ? data : []
+        [messageId]: (prev[messageId] || []).filter((r: any) => !(r.userId === user?.id && r.emoji === emoji))
       }));
-    } catch (error) {
-      console.error('Failed to load reactions:', error);
-    }
-  };
-
-  const toggleReaction = async (messageId: string, emoji: string) => {
-    if (!selectedConversation) return;
-
-    try {
-      const response = await fetch(`/api/conversations/${selectedConversation.id}/messages/${messageId}/reactions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emoji }),
-      });
-      const data = await response.json();
-      
-      if (data.action === 'added') {
-        setMessageReactions(prev => ({
-          ...prev,
-          [messageId]: [...(prev[messageId] || []), data.reaction]
-        }));
-      } else {
-        setMessageReactions(prev => ({
-          ...prev,
-          [messageId]: (prev[messageId] || []).filter((r: any) => !(r.userId === user?.id && r.emoji === emoji))
-        }));
-      }
-    } catch (error) {
-      console.error('Failed to toggle reaction:', error);
-    }
-  };
-
-  const loadChannelMessages = async (channelId: string) => {
-    try {
-      const response = await fetch(`/api/channels/${channelId}/messages`);
-      const data = await response.json();
-      setMessages(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Failed to load channel messages:', error);
+    } else {
+      setMessageReactions(prev => ({
+        ...prev,
+        [messageId]: [...(prev[messageId] || []), { id: `r${Date.now()}`, emoji, userId: user?.id, user: { name: 'You' } }]
+      }));
     }
   };
 
   const sendMessage = async () => {
     if (!newMessage.trim()) return;
 
-    try {
-      if (selectedConversation) {
-        const response = await fetch(`/api/conversations/${selectedConversation.id}/messages`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            content: newMessage,
-            parentMessageId: replyingTo,
-          }),
-        });
-        const data = await response.json();
-        setMessages([...messages, data]);
-        setNewMessage('');
-        setReplyingTo(null);
-        showToast('Message sent', 'success');
-      } else if (selectedChannel) {
-        const response = await fetch(`/api/channels/${selectedChannel.id}/messages`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: newMessage }),
-        });
-        const data = await response.json();
-        setMessages([...messages, data]);
-        setNewMessage('');
-        showToast('Message sent', 'success');
-      }
-    } catch (error) {
-      console.error('Failed to send message:', error);
-      showToast('Failed to send message', 'error');
-    }
+    // Mock implementation for demo
+    const newMsg = {
+      id: `m${Date.now()}`,
+      content: newMessage,
+      senderId: 'u2',
+      sender: { id: 'u2', name: 'You', avatar: null },
+      createdAt: new Date().toISOString(),
+      parentMessageId: replyingTo,
+    };
+    setMessages([...messages, newMsg]);
+    setNewMessage('');
+    setReplyingTo(null);
+    showToast('Message sent', 'success');
   };
 
-  const createChannel = async () => {
-    try {
-      const response = await fetch('/api/channels', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newChannelName,
-          description: newChannelDescription,
-        }),
-      });
-      if (response.ok) {
-        loadChannels();
-        setShowNewChannel(false);
-        setNewChannelName('');
-        setNewChannelDescription('');
-        showToast('Channel created', 'success');
-      } else {
-        showToast('Failed to create channel', 'error');
-      }
-    } catch (error) {
-      console.error('Failed to create channel:', error);
-      showToast('Failed to create channel', 'error');
-    }
+  const createChannel = () => {
+    const newChannel: Channel = {
+      id: `c${Date.now()}`,
+      name: newChannelName,
+      description: newChannelDescription,
+      members: [],
+      messages: [],
+      _count: { messages: 0 }
+    };
+    setChannels([...channels, newChannel]);
+    setShowNewChannel(false);
+    setNewChannelName('');
+    setNewChannelDescription('');
+    showToast('Channel created', 'success');
   };
 
   const isUserOnline = (lastSeenAt: string | null | undefined) => {
@@ -407,70 +270,47 @@ export default function MessagesPage() {
     return otherParticipant?.user.name || 'Unknown';
   };
 
-  const searchUsers = async (query: string) => {
+  const searchUsers = (query: string) => {
     if (!query) {
       setSearchResults([]);
       return;
     }
-
-    try {
-      const response = await fetch(`/api/users/search?q=${encodeURIComponent(query)}`);
-      const data = await response.json();
-      setSearchResults(Array.isArray(data) ? data.filter((u: any) => u.id !== user?.id) : []);
-    } catch (error) {
-      console.error('Failed to search users:', error);
-    }
+    const mockUsers = [
+      { id: 'u1', name: 'John Doe', email: 'john@example.com', avatar: undefined },
+      { id: 'u3', name: 'Jane Smith', email: 'jane@example.com', avatar: undefined },
+      { id: 'u4', name: 'Bob Wilson', email: 'bob@example.com', avatar: undefined },
+    ];
+    const filtered = mockUsers.filter(u => 
+      u.id !== user?.id &&
+      (u.name.toLowerCase().includes(query.toLowerCase()) || 
+      u.email.toLowerCase().includes(query.toLowerCase()))
+    );
+    setSearchResults(filtered);
   };
 
-  const startConversation = async (participantId: string) => {
-    try {
-      const response = await fetch('/api/conversations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'direct',
-          participantIds: [participantId],
-        }),
-      });
-      const data = await response.json();
-      loadConversations();
-      setSelectedConversation(data);
-      setShowNewConversation(false);
-      setSearchResults([]);
-      setSearchQuery('');
-      loadMessages(data.id);
-      showToast('Conversation started', 'success');
-    } catch (error) {
-      console.error('Failed to start conversation:', error);
-      showToast('Failed to start conversation', 'error');
-    }
+  const startConversation = (participantId: string) => {
+    setShowNewConversation(false);
+    setSearchQuery('');
+    setSearchResults([]);
+    showToast('Conversation started', 'success');
   };
 
-  const createGroupConversation = async () => {
+  const createGroupConversation = () => {
     if (!groupConversationName.trim() || selectedParticipants.length === 0) return;
-
-    try {
-      const response = await fetch('/api/conversations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'group',
-          name: groupConversationName,
-          participantIds: selectedParticipants,
-        }),
-      });
-      const data = await response.json();
-      setShowGroupConversation(false);
-      setGroupConversationName('');
-      setSelectedParticipants([]);
-      loadConversations();
-      setSelectedConversation(data);
-      loadMessages(data.id);
-      showToast('Group conversation created', 'success');
-    } catch (error) {
-      console.error('Failed to create group conversation:', error);
-      showToast('Failed to create group conversation', 'error');
-    }
+    const newConversation: Conversation = {
+      id: `conv${Date.now()}`,
+      type: 'group',
+      name: groupConversationName,
+      unreadCount: 0,
+      participants: [],
+      messages: [],
+      _count: { messages: 0 }
+    };
+    setConversations([...conversations, newConversation]);
+    setShowGroupConversation(false);
+    setGroupConversationName('');
+    setSelectedParticipants([]);
+    showToast('Group conversation created', 'success');
   };
 
   const toggleParticipant = (userId: string) => {
@@ -505,7 +345,7 @@ export default function MessagesPage() {
                     ? 'bg-gray-900 text-white'
                     : darkMode
                       ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
                 )}
               >
                 <MessageSquare className="w-4 h-4 inline mr-2" />
@@ -518,7 +358,7 @@ export default function MessagesPage() {
                     ? 'bg-gray-900 text-white'
                     : darkMode
                       ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
                 )}
               >
                 <Hash className="w-4 h-4 inline mr-2" />
@@ -547,7 +387,7 @@ export default function MessagesPage() {
               <>
                 <button
                   onClick={() => setShowNewConversation(!showNewConversation)}
-                  className={cn("w-full flex items-center space-x-2 p-3 rounded-lg transition", darkMode ? "text-gray-300 hover:bg-gray-700" : "text-gray-700 hover:bg-gray-100")}
+                  className={cn("w-full flex items-center space-x-2 p-3 rounded-lg transition", darkMode ? "text-gray-300 hover:bg-gray-700" : "text-gray-900 hover:bg-gray-100")}
                 >
                   <Plus className="w-4 h-4" />
                   <span className="text-sm">New Message</span>
@@ -555,7 +395,7 @@ export default function MessagesPage() {
 
                 <button
                   onClick={() => setShowGroupConversation(!showGroupConversation)}
-                  className={cn("w-full flex items-center space-x-2 p-3 rounded-lg transition", darkMode ? "text-gray-300 hover:bg-gray-700" : "text-gray-700 hover:bg-gray-100")}
+                  className={cn("w-full flex items-center space-x-2 p-3 rounded-lg transition", darkMode ? "text-gray-300 hover:bg-gray-700" : "text-gray-900 hover:bg-gray-100")}
                 >
                   <Plus className="w-4 h-4" />
                   <span className="text-sm">New Group</span>
@@ -720,7 +560,7 @@ export default function MessagesPage() {
               <>
                 <button
                   onClick={() => setShowNewChannel(!showNewChannel)}
-                  className={cn("w-full flex items-center space-x-2 p-3 rounded-lg transition", darkMode ? "text-gray-300 hover:bg-gray-700" : "text-gray-700 hover:bg-gray-100")}
+                  className={cn("w-full flex items-center space-x-2 p-3 rounded-lg transition", darkMode ? "text-gray-300 hover:bg-gray-700" : "text-gray-900 hover:bg-gray-100")}
                 >
                   <Plus className="w-4 h-4" />
                   <span className="text-sm">New Channel</span>
@@ -949,11 +789,11 @@ export default function MessagesPage() {
                   </div>
                 )}
                 {replyingTo && (
-                  <div className={cn("flex items-center justify-between p-2 mb-2 rounded text-sm", darkMode ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-700")}>
+                  <div className={cn("flex items-center justify-between p-2 mb-2 rounded text-sm", darkMode ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-900")}>
                     <span>Replying to message...</span>
                     <button
                       onClick={() => setReplyingTo(null)}
-                      className="text-gray-500 hover:text-gray-700"
+                      className="text-gray-500 hover:text-gray-900"
                     >
                       ✕
                     </button>

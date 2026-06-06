@@ -43,82 +43,102 @@ export default function ConnectionsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
 
+  // Mock data for demo
+  const mockConnections: Connection[] = [
+    {
+      id: 'c1',
+      status: 'pending',
+      requesterId: 'u1',
+      receiverId: 'u2',
+      requester: { id: 'u1', name: 'John Doe', email: 'john@example.com', avatar: undefined },
+      receiver: { id: 'u2', name: 'You', email: 'you@example.com', avatar: undefined }
+    },
+    {
+      id: 'c2',
+      status: 'pending',
+      requesterId: 'u2',
+      receiverId: 'u3',
+      requester: { id: 'u2', name: 'You', email: 'you@example.com', avatar: undefined },
+      receiver: { id: 'u3', name: 'Jane Smith', email: 'jane@example.com', avatar: undefined }
+    },
+    {
+      id: 'c3',
+      status: 'accepted',
+      requesterId: 'u2',
+      receiverId: 'u4',
+      requester: { id: 'u2', name: 'You', email: 'you@example.com', avatar: undefined },
+      receiver: { id: 'u4', name: 'Bob Wilson', email: 'bob@example.com', avatar: undefined }
+    },
+    {
+      id: 'c4',
+      status: 'accepted',
+      requesterId: 'u5',
+      receiverId: 'u2',
+      requester: { id: 'u5', name: 'Alice Johnson', email: 'alice@example.com', avatar: undefined },
+      receiver: { id: 'u2', name: 'You', email: 'you@example.com', avatar: undefined }
+    },
+    {
+      id: 'c5',
+      status: 'accepted',
+      requesterId: 'u2',
+      receiverId: 'u6',
+      requester: { id: 'u2', name: 'You', email: 'you@example.com', avatar: undefined },
+      receiver: { id: 'u6', name: 'Charlie Brown', email: 'charlie@example.com', avatar: undefined }
+    }
+  ];
+
+  const mockUsers: User[] = [
+    { id: 'u1', name: 'John Doe', email: 'john@example.com', avatar: undefined },
+    { id: 'u3', name: 'Jane Smith', email: 'jane@example.com', avatar: undefined },
+    { id: 'u4', name: 'Bob Wilson', email: 'bob@example.com', avatar: undefined },
+    { id: 'u5', name: 'Alice Johnson', email: 'alice@example.com', avatar: undefined },
+    { id: 'u6', name: 'Charlie Brown', email: 'charlie@example.com', avatar: undefined },
+    { id: 'u7', name: 'Diana Prince', email: 'diana@example.com', avatar: undefined },
+  ];
+
   useEffect(() => {
-    loadConnections();
+    // Load mock data
+    setConnections(mockConnections);
+    setLoading(false);
   }, []);
 
-  const loadConnections = async () => {
-    try {
-      const response = await fetch('/api/connections');
-      const data = await response.json();
-      setConnections(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Failed to load connections:', error);
-      setConnections([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const searchUsers = async (query: string) => {
+  const loadConnections = () => {};
+  const searchUsers = (query: string) => {
     if (!query) {
       setSearchResults([]);
       return;
     }
-
-    try {
-      const response = await fetch(`/api/users/search?q=${encodeURIComponent(query)}`);
-      const data = await response.json();
-      setSearchResults(data.filter((u: User) => u.id !== user?.id));
-    } catch (error) {
-      console.error('Failed to search users:', error);
-    }
+    const filtered = mockUsers.filter(u => 
+      u.id !== user?.id &&
+      (u.name.toLowerCase().includes(query.toLowerCase()) || 
+      u.email.toLowerCase().includes(query.toLowerCase()))
+    );
+    setSearchResults(filtered);
   };
-
-  const sendConnectionRequest = async (receiverId: string) => {
-    try {
-      await fetch('/api/connections', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ receiverId }),
-      });
-      setSearchResults([]);
-      setSearchQuery('');
-      setShowSearch(false);
-      loadConnections();
-      showToast('Connection request sent', 'success');
-    } catch (error) {
-      console.error('Failed to send request:', error);
-      showToast('Failed to send request', 'error');
-    }
+  const sendConnectionRequest = (receiverId: string) => {
+    const newConnection: Connection = {
+      id: `c${Date.now()}`,
+      status: 'pending',
+      requesterId: user?.id || 'u2',
+      receiverId,
+      requester: { id: user?.id || 'u2', name: 'You', email: 'you@example.com', avatar: undefined },
+      receiver: mockUsers.find(u => u.id === receiverId) || mockUsers[0]
+    };
+    setConnections([...connections, newConnection]);
+    setSearchResults([]);
+    setSearchQuery('');
+    setShowSearch(false);
+    showToast('Connection request sent', 'success');
   };
-
-  const updateConnection = async (connectionId: string, status: string) => {
-    try {
-      await fetch(`/api/connections/${connectionId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      });
-      loadConnections();
-      showToast(status === 'accepted' ? 'Connection accepted' : 'Connection rejected', 'success');
-    } catch (error) {
-      console.error('Failed to update connection:', error);
-      showToast('Failed to update connection', 'error');
-    }
+  const updateConnection = (connectionId: string, status: string) => {
+    setConnections(connections.map(c => 
+      c.id === connectionId ? { ...c, status } : c
+    ));
+    showToast(status === 'accepted' ? 'Connection accepted' : 'Connection rejected', 'success');
   };
-
-  const deleteConnection = async (connectionId: string) => {
-    try {
-      await fetch(`/api/connections/${connectionId}`, {
-        method: 'DELETE',
-      });
-      loadConnections();
-      showToast('Connection removed', 'success');
-    } catch (error) {
-      console.error('Failed to delete connection:', error);
-      showToast('Failed to remove connection', 'error');
-    }
+  const deleteConnection = (connectionId: string) => {
+    setConnections(connections.filter(c => c.id !== connectionId));
+    showToast('Connection removed', 'success');
   };
 
   const pendingRequests = connections.filter(

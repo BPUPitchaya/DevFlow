@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/lib/store';
+import { useAuthStore, demoUsers } from '@/lib/store';
 import { 
   LayoutDashboard, 
   Activity, 
@@ -12,9 +12,11 @@ import {
   UserPlus,
   MessageSquare,
   Moon,
-  Sun
+  Sun,
+  User
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useState } from 'react';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -27,6 +29,8 @@ export default function DashboardLayout({ children, activeTab }: DashboardLayout
   const logout = useAuthStore((state) => state.logout);
   const darkMode = useAuthStore((state) => state.darkMode);
   const toggleDarkMode = useAuthStore((state) => state.toggleDarkMode);
+  const switchUser = useAuthStore((state) => state.switchUser);
+  const [showUserSwitcher, setShowUserSwitcher] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -83,10 +87,54 @@ export default function DashboardLayout({ children, activeTab }: DashboardLayout
               <button className={cn("p-2", darkMode ? "text-gray-300 hover:text-white" : "text-gray-400 hover:text-gray-500")}>
                 <Bell className="w-5 h-5" />
               </button>
+              <div className="relative">
+                <button
+                  onClick={() => setShowUserSwitcher(!showUserSwitcher)}
+                  className={cn("p-2", darkMode ? "text-gray-300 hover:text-white" : "text-gray-400 hover:text-gray-500")}
+                  title="Switch demo user"
+                >
+                  <User className="w-5 h-5" />
+                </button>
+                {showUserSwitcher && (
+                  <div className={cn("absolute right-0 mt-2 w-64 rounded-lg shadow-lg z-50", darkMode ? "bg-gray-800 border border-gray-700" : "bg-white border border-gray-200")}>
+                    <div className="p-3 border-b border-gray-200 dark:border-gray-700">
+                      <p className={cn("text-sm font-medium", darkMode ? "text-white" : "text-gray-900")}>Switch Demo User</p>
+                    </div>
+                    <div className="py-1">
+                      {Object.entries(demoUsers).map(([id, demoUser]) => (
+                        <button
+                          key={id}
+                          onClick={() => {
+                            switchUser(id);
+                            setShowUserSwitcher(false);
+                          }}
+                          className={cn(
+                            "w-full text-left px-4 py-2 flex items-center space-x-3",
+                            user?.id === id 
+                              ? darkMode ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900"
+                              : darkMode ? "text-gray-300 hover:bg-gray-700" : "text-gray-700 hover:bg-gray-50"
+                          )}
+                        >
+                          <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                            <span className="text-sm font-medium text-gray-600">{demoUser.name.charAt(0)}</span>
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">{demoUser.name}</p>
+                            <p className="text-xs text-gray-500">{demoUser.role.replace(/_/g, ' ')}</p>
+                          </div>
+                          {user?.id === id && (
+                            <span className="text-xs text-green-600">Current</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
               <div className="flex items-center space-x-3">
                 <div className="text-right">
                   <p className={cn("text-sm font-medium", darkMode ? "text-white" : "text-gray-900")}>{user?.name}</p>
-                  <p className={cn("text-xs", darkMode ? "text-gray-400" : "text-gray-500")}>{user?.role?.toLowerCase()}</p>
+                  <p className={cn("text-xs", darkMode ? "text-gray-400" : "text-gray-500")}>{user?.role?.toLowerCase().replace(/_/g, ' ')}</p>
                 </div>
                 <button
                   onClick={handleLogout}
