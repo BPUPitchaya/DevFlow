@@ -56,3 +56,10 @@ export async function triggerChannelMessageSent(
 ) {
   await triggerEvent(`channel-${channelId}`, 'message-sent', messageData);
 }
+
+export async function triggerTypingIndicator(
+  conversationId: string,
+  typingData: any
+) {
+  await triggerEvent(`conversation-${conversationId}`, 'typing-indicator', typingData);
+}

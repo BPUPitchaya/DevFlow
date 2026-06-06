@@ -42,6 +42,7 @@ model User {
   conversations       ConversationParticipant[]
   sentMessages       Message[]
   messageReactions   MessageReaction[]
+  typingIndicators   TypingIndicator[]
   channelMessages     ChannelMessage[]
   channelMemberships  ChannelMember[]
 
@@ -199,6 +200,7 @@ model Conversation {
 
   participants ConversationParticipant[]
   messages    Message[]
+  typingIndicators TypingIndicator[]
 }
 
 model ConversationParticipant {
@@ -244,6 +246,20 @@ model MessageReaction {
   @@unique([messageId, userId, emoji])
   @@index([messageId])
   @@index([userId])
+}
+
+model TypingIndicator {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastTypedAt    DateTime     @default(now())
+
+  @@unique([conversationId, userId])
+  @@index([conversationId])
+  @@index([userId])
+  @@index([lastTypedAt])
 }
 
 model Channel {

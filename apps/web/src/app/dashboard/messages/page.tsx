@@ -81,6 +81,7 @@ export default function MessagesPage() {
   const [newChannelDescription, setNewChannelDescription] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [messageReactions, setMessageReactions] = useState<Record<string, any[]>>({});
+  const [typingUsers, setTypingUsers] = useState<any[]>([]);
 
   useEffect(() => {
     loadConversations();
@@ -94,6 +95,17 @@ export default function MessagesPage() {
       channel = subscribeToConversation(selectedConversation.id, {
         onMessageSent: (data) => {
           setMessages((prev) => [...prev, data]);
+        },
+        onTypingIndicator: (data) => {
+          if (data.userId !== user?.id) {
+            setTypingUsers((prev) => {
+              const exists = prev.find((u) => u.id === data.userId);
+              if (exists) {
+                return prev.map((u) => (u.id === data.userId ? { ...u, lastTypedAt: new Date() } : u));
+              }
+              return [...prev, { id: data.userId, lastTypedAt: new Date() }];
+            });
+          }
         },
       });
     }
@@ -122,6 +134,30 @@ export default function MessagesPage() {
       }
     };
   }, [selectedChannel]);
+
+  useEffect(() => {
+    // Clean up old typing indicators (older than 5 seconds)
+    const interval = setInterval(() => {
+      setTypingUsers((prev) => {
+        const fiveSecondsAgo = new Date(Date.now() - 5000);
+        return prev.filter((u) => u.lastTypedAt > fiveSecondsAgo);
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const sendTypingIndicator = async () => {
+    if (!selectedConversation) return;
+
+    try {
+      await fetch(`/api/conversations/${selectedConversation.id}/typing`, {
+        method: 'POST',
+      });
+    } catch (error) {
+      console.error('Failed to send typing indicator:', error);
+    }
+  };
 
   const loadConversations = async () => {
     try {
@@ -157,6 +193,11 @@ export default function MessagesPage() {
           loadReactions(conversationId, message.id);
         }
       }
+      
+      // Load typing indicators
+      const typingResponse = await fetch(`/api/conversations/${conversationId}/typing`);
+      const typingData = await typingResponse.json();
+      setTypingUsers(Array.isArray(typingData) ? typingData.map((t: any) => ({ id: t.userId, lastTypedAt: new Date() })) : []);
       
       // Update last read timestamp
       try {
@@ -604,11 +645,19 @@ export default function MessagesPage() {
               </div>
 
               <div className={cn("p-4 border-t", darkMode ? "border-gray-700" : "border-gray-200")}>
+                {typingUsers.length > 0 && (
+                  <div className="text-xs text-gray-500 mb-2">
+                    {typingUsers.length === 1 ? 'Someone is typing...' : `${typingUsers.length} people are typing...`}
+                  </div>
+                )}
                 <div className="flex space-x-2">
                   <input
                     type="text"
                     value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
+                    onChange={(e) => {
+                      setNewMessage(e.target.value);
+                      sendTypingIndicator();
+                    }}
                     onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
                     placeholder="Type a message..."
                     className={cn("flex-1 px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500",
