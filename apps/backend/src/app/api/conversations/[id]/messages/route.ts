@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { triggerMessageSent } from '@/lib/pusher';
+import { triggerMessageSent, triggerMessageUpdated, triggerMessageDeleted } from '@/lib/pusher';
 
 export async function GET(
   request: NextRequest,
@@ -76,7 +76,7 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { content } = body as { content: string };
+    const { content, parentMessageId } = body as { content: string; parentMessageId?: string };
 
     if (!content) {
       return NextResponse.json(
@@ -105,6 +105,7 @@ export async function POST(
         content,
         conversationId: params.id,
         senderId: userId,
+        parentMessageId,
       },
       include: {
         sender: {
@@ -112,6 +113,17 @@ export async function POST(
             id: true,
             name: true,
             avatar: true,
+          },
+        },
+        parentMessage: {
+          include: {
+            sender: {
+              select: {
+                id: true,
+                name: true,
+                avatar: true,
+              },
+            },
           },
         },
       },

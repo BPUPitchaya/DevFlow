@@ -63,3 +63,17 @@ export async function triggerTypingIndicator(
 ) {
   await triggerEvent(`conversation-${conversationId}`, 'typing-indicator', typingData);
 }
+
+export async function triggerMessageUpdated(
+  conversationId: string,
+  messageData: any
+) {
+  await triggerEvent(`conversation-${conversationId}`, 'message-updated', messageData);
+}
+
+export async function triggerMessageDeleted(
+  conversationId: string,
+  messageId: string
+) {
+  await triggerEvent(`conversation-${conversationId}`, 'message-deleted', { messageId });
+}

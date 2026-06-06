@@ -36,6 +36,8 @@ export function unsubscribeFromTeam(teamId: string) {
 export function subscribeToConversation(conversationId: string, callbacks: {
   onMessageSent?: (data: any) => void;
   onTypingIndicator?: (data: any) => void;
+  onMessageUpdated?: (data: any) => void;
+  onMessageDeleted?: (data: any) => void;
 }) {
   const channel = pusher.subscribe(`conversation-${conversationId}`);
 
@@ -45,6 +47,14 @@ export function subscribeToConversation(conversationId: string, callbacks: {
 
   if (callbacks.onTypingIndicator) {
     channel.bind('typing-indicator', callbacks.onTypingIndicator);
+  }
+
+  if (callbacks.onMessageUpdated) {
+    channel.bind('message-updated', callbacks.onMessageUpdated);
+  }
+
+  if (callbacks.onMessageDeleted) {
+    channel.bind('message-deleted', callbacks.onMessageDeleted);
   }
 
   return channel;
