@@ -47,6 +47,7 @@ interface Milestone {
   dependsOn?: string[]; // Array of milestone IDs that must be completed first
   timeSpent?: number; // Hours spent
   comments?: Comment[];
+  category?: 'Design' | 'Development' | 'Testing' | 'Deployment' | 'Documentation';
 }
 
 interface Project {
@@ -60,6 +61,7 @@ interface Project {
   priority?: 'High' | 'Medium' | 'Low';
   tags?: string[];
   comments?: Comment[];
+  archived?: boolean;
 }
 
 interface Activity {
@@ -238,12 +240,13 @@ export default function TeamsPage() {
   const [newProjectDetails, setNewProjectDetails] = useState('');
   const [newProjectRoles, setNewProjectRoles] = useState('');
   const [projectMemberRoles, setProjectMemberRoles] = useState<Record<string, string>>({});
-  const [projectMilestones, setProjectMilestones] = useState<{name: string, description: string, dueDate?: string, priority?: 'High' | 'Medium' | 'Low', dependsOn?: string[]}[]>([]);
+  const [projectMilestones, setProjectMilestones] = useState<{name: string, description: string, dueDate?: string, priority?: 'High' | 'Medium' | 'Low', dependsOn?: string[], category?: 'Design' | 'Development' | 'Testing' | 'Deployment' | 'Documentation'}[]>([]);
   const [newMilestoneName, setNewMilestoneName] = useState('');
   const [newMilestoneDescription, setNewMilestoneDescription] = useState('');
   const [newMilestoneDueDate, setNewMilestoneDueDate] = useState('');
   const [newMilestonePriority, setNewMilestonePriority] = useState<'High' | 'Medium' | 'Low'>('Medium');
   const [newMilestoneDependencies, setNewMilestoneDependencies] = useState<string[]>([]);
+  const [newMilestoneCategory, setNewMilestoneCategory] = useState<'Design' | 'Development' | 'Testing' | 'Deployment' | 'Documentation'>('Development');
   const [projectPriority, setProjectPriority] = useState<'High' | 'Medium' | 'Low'>('Medium');
   const [projectTags, setProjectTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState('');
@@ -256,15 +259,25 @@ export default function TeamsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [mentionSuggestions, setMentionSuggestions] = useState<{show: boolean, query: string, position: {x: number, y: number}, targetInput: 'milestone' | 'project', milestoneId?: string}>({show: false, query: '', position: {x: 0, y: 0}, targetInput: 'project'});
+  const [projectSearchQuery, setProjectSearchQuery] = useState('');
+  const [projectStatusFilter, setProjectStatusFilter] = useState<string>('All');
+  const [projectPriorityFilter, setProjectPriorityFilter] = useState<string>('All');
+  const [projectTagFilter, setProjectTagFilter] = useState<string>('All');
+  const [projectAssigneeFilter, setProjectAssigneeFilter] = useState<string>('All');
+  const [showArchivedProjects, setShowArchivedProjects] = useState(false);
   const [newTeamName, setNewTeamName] = useState('');
   const [newTeamDescription, setNewTeamDescription] = useState('');
   const [memberEmail, setMemberEmail] = useState('');
 
+  const isDemo = useAuthStore((state) => state.isDemo);
+
   useEffect(() => {
-    // Load mock data
-    setTeams(mockTeams);
+    if (isDemo) {
+      setTeams(mockTeams);
+      setProjects(mockProjects);
+    }
     setLoading(false);
-  }, []);
+  }, [isDemo]);
 
   const loadTeams = () => {};
   const handleCreateTeam = (e: React.FormEvent) => {
@@ -312,7 +325,8 @@ export default function TeamsPage() {
       priority: m.priority || 'Medium',
       dueDate: m.dueDate ? new Date(m.dueDate) : undefined,
       dependsOn: m.dependsOn || [],
-      timeSpent: 0
+      timeSpent: 0,
+      category: m.category || 'Development'
     }));
 
     const newProject: Project = {
@@ -357,13 +371,15 @@ export default function TeamsPage() {
         description: newMilestoneDescription,
         dueDate: newMilestoneDueDate,
         priority: newMilestonePriority,
-        dependsOn: newMilestoneDependencies
+        dependsOn: newMilestoneDependencies,
+        category: newMilestoneCategory
       }]);
       setNewMilestoneName('');
       setNewMilestoneDescription('');
       setNewMilestoneDueDate('');
       setNewMilestonePriority('Medium');
       setNewMilestoneDependencies([]);
+      setNewMilestoneCategory('Development');
     }
   };
 
@@ -774,6 +790,83 @@ export default function TeamsPage() {
     setMentionSuggestions(prev => ({ ...prev, show: false }));
   };
 
+  const handleArchiveProject = (projectId: string) => {
+    if (!viewTeamDetail) return;
+    setProjects(prev => ({
+      ...prev,
+      [viewTeamDetail.id]: prev[viewTeamDetail.id]?.map(p => 
+        p.id === projectId 
+          ? { ...p, archived: true }
+          : p
+      ) || []
+    }));
+  };
+
+  const handleUnarchiveProject = (projectId: string) => {
+    if (!viewTeamDetail) return;
+    setProjects(prev => ({
+      ...prev,
+      [viewTeamDetail.id]: prev[viewTeamDetail.id]?.map(p => 
+        p.id === projectId 
+          ? { ...p, archived: false }
+          : p
+      ) || []
+    }));
+  };
+
+  const handleReorderMilestones = (fromIndex: number, toIndex: number) => {
+    if (!viewTeamDetail || !viewProjectDetail) return;
+    const milestones = [...(viewProjectDetail.milestones || [])];
+    const [movedMilestone] = milestones.splice(fromIndex, 1);
+    milestones.splice(toIndex, 0, movedMilestone);
+
+    setProjects(prev => ({
+      ...prev,
+      [viewTeamDetail.id]: prev[viewTeamDetail.id]?.map(p => 
+        p.id === viewProjectDetail.id 
+          ? { ...p, milestones }
+          : p
+      ) || []
+    }));
+    setViewProjectDetail({ ...viewProjectDetail, milestones });
+  };
+
+  const getFilteredProjects = (teamProjects: Project[]) => {
+    return teamProjects.filter(project => {
+      // Archive filter
+      if (showArchivedProjects && !project.archived) return false;
+      if (!showArchivedProjects && project.archived) return false;
+
+      // Search filter
+      if (projectSearchQuery && !project.name.toLowerCase().includes(projectSearchQuery.toLowerCase())) {
+        return false;
+      }
+
+      // Status filter
+      if (projectStatusFilter !== 'All' && project.status !== projectStatusFilter) {
+        return false;
+      }
+
+      // Priority filter
+      if (projectPriorityFilter !== 'All' && project.priority !== projectPriorityFilter) {
+        return false;
+      }
+
+      // Tag filter
+      if (projectTagFilter !== 'All' && !project.tags?.includes(projectTagFilter)) {
+        return false;
+      }
+
+      // Assignee filter
+      if (projectAssigneeFilter !== 'All') {
+        const hasAssignee = Object.entries(project.memberRoles || {}).some(([_, role]) => role === projectAssigneeFilter);
+        if (!hasAssignee) return false;
+      }
+
+      return true;
+    });
+  };
+
   if (loading) {
     return (
       <DashboardLayout activeTab="teams">
@@ -795,7 +888,7 @@ export default function TeamsPage() {
           <div className="absolute top-0 right-0 z-50">
             <button
               onClick={() => setShowNotifications(!showNotifications)}
-              className="relative p-2 text-gray-600 hover:text-gray-900 transition"
+              className="relative p-2 text-gray-600 hover:text-black transition"
             >
               <Bell className="w-6 h-6" />
               {unreadCount > 0 && (
@@ -809,7 +902,7 @@ export default function TeamsPage() {
             {showNotifications && (
               <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
                 <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-                  <h3 className="font-semibold text-gray-900">Notifications</h3>
+                  <h3 className="font-semibold text-black">Notifications</h3>
                   {unreadCount > 0 && (
                     <button
                       onClick={markAllNotificationsAsRead}
@@ -836,7 +929,7 @@ export default function TeamsPage() {
                         >
                           <div className="flex items-start space-x-3">
                             <div className="flex-1">
-                              <p className="text-sm text-gray-900">
+                              <p className="text-sm text-black">
                                 <span className="font-medium">{notification.fromUserName}</span>
                                 {notification.type === 'mention' && ' mentioned you'}
                               </p>
@@ -863,7 +956,7 @@ export default function TeamsPage() {
           <div className="space-y-6 pointer-events-auto">
           <button
             onClick={() => setViewProjectDetail(null)}
-            className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition"
+            className="flex items-center space-x-2 text-gray-600 hover:text-black transition"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Back to {(viewTeamDetail as any).name}</span>
@@ -873,7 +966,7 @@ export default function TeamsPage() {
             <div className="flex items-start justify-between mb-4">
               <div className="flex-1">
                 <div className="flex items-center space-x-2 mb-2">
-                  <h2 className="text-2xl font-bold text-gray-900">{viewProjectDetail.name}</h2>
+                  <h2 className="text-2xl font-bold text-black">{viewProjectDetail.name}</h2>
                   {viewProjectDetail.priority && (
                     <span className={cn(
                       "text-sm px-2 py-1 rounded",
@@ -944,7 +1037,7 @@ export default function TeamsPage() {
 
           {viewProjectDetail.milestones && viewProjectDetail.milestones.length > 0 && (
             <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Project Milestones</h3>
+              <h3 className="text-lg font-semibold text-black mb-4">Project Milestones</h3>
               <div className="space-y-3">
                 {viewProjectDetail.milestones.map((milestone) => (
                   <div key={milestone.id} className={cn(
@@ -956,7 +1049,19 @@ export default function TeamsPage() {
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center space-x-2 mb-1">
-                          <h4 className="font-medium text-gray-900">{milestone.name}</h4>
+                          <h4 className="font-medium text-black">{milestone.name}</h4>
+                          {milestone.category && (
+                            <span className={cn(
+                              "text-xs px-1.5 py-0.5 rounded",
+                              milestone.category === 'Design' ? "bg-purple-100 text-purple-800" :
+                              milestone.category === 'Development' ? "bg-blue-100 text-blue-800" :
+                              milestone.category === 'Testing' ? "bg-orange-100 text-orange-800" :
+                              milestone.category === 'Deployment' ? "bg-green-100 text-green-800" :
+                              "bg-gray-100 text-gray-800"
+                            )}>
+                              {milestone.category}
+                            </span>
+                          )}
                           {milestone.priority && (
                             <span className={cn(
                               "text-xs px-1.5 py-0.5 rounded",
@@ -996,7 +1101,7 @@ export default function TeamsPage() {
                               {milestone.comments.map((comment) => (
                                 <div key={comment.id} className="bg-white p-2 rounded text-xs">
                                   <div className="flex items-center space-x-2 mb-1">
-                                    <span className="font-medium text-gray-900">{comment.authorName}</span>
+                                    <span className="font-medium text-black">{comment.authorName}</span>
                                     <span className="text-gray-400">{comment.createdAt.toLocaleString()}</span>
                                   </div>
                                   <p className="text-gray-600">{comment.text}</p>
@@ -1013,7 +1118,7 @@ export default function TeamsPage() {
                               value={newMilestoneComment[milestone.id] || ''}
                               onChange={(e) => handleCommentInputChange(e.target.value, 'milestone', milestone.id, e)}
                               onKeyPress={(e) => e.key === 'Enter' && handleAddMilestoneComment(milestone.id)}
-                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm text-black"
                             />
                             <button
                               onClick={() => handleAddMilestoneComment(milestone.id)}
@@ -1037,7 +1142,7 @@ export default function TeamsPage() {
                                         <span className="text-sm font-medium text-gray-600">{member.name.charAt(0)}</span>
                                       </div>
                                       <div>
-                                        <p className="text-sm font-medium text-gray-900">{member.name}</p>
+                                        <p className="text-sm font-medium text-black">{member.name}</p>
                                         <p className="text-xs text-gray-500">{member.email}</p>
                                       </div>
                                     </div>
@@ -1048,6 +1153,28 @@ export default function TeamsPage() {
                         </div>
                       </div>
                       <div className="flex flex-col space-y-2 ml-4">
+                        <div className="flex space-x-1">
+                          <button
+                            onClick={() => {
+                              const index = viewProjectDetail.milestones?.findIndex(m => m.id === milestone.id) || 0;
+                              if (index > 0) handleReorderMilestones(index, index - 1);
+                            }}
+                            disabled={(viewProjectDetail.milestones?.findIndex(m => m.id === milestone.id) || 0) === 0}
+                            className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition text-xs disabled:opacity-50"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            onClick={() => {
+                              const index = viewProjectDetail.milestones?.findIndex(m => m.id === milestone.id) || 0;
+                              if (index < (viewProjectDetail.milestones?.length || 0) - 1) handleReorderMilestones(index, index + 1);
+                            }}
+                            disabled={(viewProjectDetail.milestones?.findIndex(m => m.id === milestone.id) || 0) === (viewProjectDetail.milestones?.length || 0) - 1}
+                            className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition text-xs disabled:opacity-50"
+                          >
+                            ↓
+                          </button>
+                        </div>
                         {!milestone.completed && (
                           <button
                             onClick={() => handleCompleteMilestone(milestone.id)}
@@ -1070,7 +1197,7 @@ export default function TeamsPage() {
                             placeholder="Hours"
                             min="0"
                             step="0.5"
-                            className="w-16 px-2 py-1 border border-gray-300 rounded text-sm"
+                            className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-black"
                             id={`time-${milestone.id}`}
                           />
                           <button
@@ -1097,7 +1224,7 @@ export default function TeamsPage() {
 
           <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Project Comments</h3>
+              <h3 className="text-lg font-semibold text-black">Project Comments</h3>
               <button
                 onClick={() => setShowActivityFeed(!showActivityFeed)}
                 className="text-sm text-blue-600 hover:text-blue-800"
@@ -1108,7 +1235,7 @@ export default function TeamsPage() {
             
             {showActivityFeed && (
               <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                <h4 className="text-sm font-medium text-gray-900 mb-3">Activity Feed</h4>
+                <h4 className="text-sm font-medium text-black mb-3">Activity Feed</h4>
                 <div className="space-y-2 max-h-60 overflow-y-auto">
                   {activities.length === 0 ? (
                     <p className="text-sm text-gray-500">No activity yet</p>
@@ -1132,7 +1259,7 @@ export default function TeamsPage() {
                 {viewProjectDetail.comments.map((comment) => (
                   <div key={comment.id} className="bg-gray-50 p-3 rounded-lg">
                     <div className="flex items-center space-x-2 mb-1">
-                      <span className="font-medium text-gray-900 text-sm">{comment.authorName}</span>
+                      <span className="font-medium text-black text-sm">{comment.authorName}</span>
                       <span className="text-gray-400 text-xs">{comment.createdAt.toLocaleString()}</span>
                     </div>
                     <p className="text-gray-700 text-sm">{comment.text}</p>
@@ -1147,7 +1274,7 @@ export default function TeamsPage() {
                 value={newProjectComment}
                 onChange={(e) => handleCommentInputChange(e.target.value, 'project', undefined, e)}
                 onKeyPress={(e) => e.key === 'Enter' && handleAddProjectComment()}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 text-sm"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-black text-sm"
               />
               <button
                 onClick={handleAddProjectComment}
@@ -1171,7 +1298,7 @@ export default function TeamsPage() {
                           <span className="text-sm font-medium text-gray-600">{member.name.charAt(0)}</span>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-900">{member.name}</p>
+                          <p className="text-sm font-medium text-black">{member.name}</p>
                           <p className="text-xs text-gray-500">{member.email}</p>
                         </div>
                       </div>
@@ -1183,7 +1310,7 @@ export default function TeamsPage() {
 
           {viewProjectDetail.memberRoles && Object.keys(viewProjectDetail.memberRoles).length > 0 && (
             <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Project Team Roles</h3>
+              <h3 className="text-lg font-semibold text-black mb-4">Project Team Roles</h3>
               <div className="space-y-2">
                 {Object.entries(viewProjectDetail.memberRoles).map(([memberId, role]) => {
                   const member = teamMembers.find(m => m.id === memberId);
@@ -1194,7 +1321,7 @@ export default function TeamsPage() {
                         <span className="text-sm font-medium text-gray-600">{member.name.charAt(0)}</span>
                       </div>
                       <div className="flex-1">
-                        <p className="font-medium text-gray-900">{member.name}</p>
+                        <p className="font-medium text-black">{member.name}</p>
                         <p className="text-sm text-gray-500">{member.email}</p>
                       </div>
                       <span className="text-sm text-gray-600 bg-white px-3 py-1 rounded-full border border-gray-200">
@@ -1216,20 +1343,23 @@ export default function TeamsPage() {
   if (viewTeamDetail) {
     const teamMembers = mockTeamMembers[(viewTeamDetail as any).id] || [];
     const teamProjects = projects[(viewTeamDetail as any).id] || [];
+    const filteredProjects = getFilteredProjects(teamProjects);
+    const allTags = Array.from(new Set(teamProjects.flatMap(p => p.tags || [])));
+    const allAssignees = Array.from(new Set(Object.values(teamProjects.flatMap(p => Object.entries(p.memberRoles || {})).map(([_, role]) => role))));
 
     return (
       <DashboardLayout activeTab="teams">
         <div className="space-y-6 pointer-events-auto">
           <button
             onClick={() => setViewTeamDetail(null)}
-            className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition"
+            className="flex items-center space-x-2 text-gray-600 hover:text-black transition"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Back to Teams</span>
           </button>
 
           <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">{(viewTeamDetail as any).name}</h2>
+            <h2 className="text-2xl font-bold text-black mb-2">{(viewTeamDetail as any).name}</h2>
             {viewTeamDetail.description && (
               <p className="text-gray-600">{viewTeamDetail.description}</p>
             )}
@@ -1240,14 +1370,77 @@ export default function TeamsPage() {
               </div>
               <div className="flex items-center space-x-2">
                 <Calendar className="w-4 h-4" />
-                <span>{teamProjects.length} active projects</span>
+                <span>{teamProjects.length} projects</span>
               </div>
+            </div>
+          </div>
+
+          {/* Filters */}
+          <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
+            <div className="flex flex-wrap items-center gap-4">
+              <input
+                type="text"
+                placeholder="Search projects..."
+                value={projectSearchQuery}
+                onChange={(e) => setProjectSearchQuery(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-black"
+              />
+              <select
+                value={projectStatusFilter}
+                onChange={(e) => setProjectStatusFilter(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-black"
+              >
+                <option value="All">All Status</option>
+                <option value="Planning">Planning</option>
+                <option value="In Progress">In Progress</option>
+                <option value="On Hold">On Hold</option>
+                <option value="Completed">Completed</option>
+              </select>
+              <select
+                value={projectPriorityFilter}
+                onChange={(e) => setProjectPriorityFilter(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-black"
+              >
+                <option value="All">All Priority</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+              </select>
+              <select
+                value={projectTagFilter}
+                onChange={(e) => setProjectTagFilter(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-black"
+              >
+                <option value="All">All Tags</option>
+                {allTags.map(tag => (
+                  <option key={tag} value={tag}>{tag}</option>
+                ))}
+              </select>
+              <select
+                value={projectAssigneeFilter}
+                onChange={(e) => setProjectAssigneeFilter(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-black"
+              >
+                <option value="All">All Assignees</option>
+                {allAssignees.map(role => (
+                  <option key={role} value={role}>{role}</option>
+                ))}
+              </select>
+              <label className="flex items-center space-x-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={showArchivedProjects}
+                  onChange={(e) => setShowArchivedProjects(e.target.checked)}
+                  className="rounded"
+                />
+                <span>Show Archived</span>
+              </label>
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pointer-events-auto">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Team Members</h3>
+              <h3 className="text-lg font-semibold text-black mb-4">Team Members</h3>
               <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
                 <div className="divide-y divide-gray-100">
                   {teamMembers.map((member) => (
@@ -1259,7 +1452,7 @@ export default function TeamsPage() {
                           </span>
                         </div>
                         <div>
-                          <p className="font-medium text-gray-900">{member.name}</p>
+                          <p className="font-medium text-black">{member.name}</p>
                           <p className="text-sm text-gray-500">{member.email}</p>
                         </div>
                       </div>
@@ -1274,7 +1467,7 @@ export default function TeamsPage() {
 
             <div className="pointer-events-auto">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Current Projects</h3>
+                <h3 className="text-lg font-semibold text-black">Current Projects</h3>
                 <button
                   type="button"
                   onClick={() => {
@@ -1291,19 +1484,22 @@ export default function TeamsPage() {
                 </button>
               </div>
               <div className="space-y-3">
-                {teamProjects.map((project) => (
+                {filteredProjects.map((project) => (
                   <div 
                     key={project.id} 
                     onClick={() => {
                       console.log('Project clicked:', project.name);
                       setViewProjectDetail(project);
                     }}
-                    className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm hover:shadow-md transition cursor-pointer pointer-events-auto"
+                    className={cn(
+                      "bg-white rounded-lg border p-4 shadow-sm hover:shadow-md transition cursor-pointer pointer-events-auto",
+                      project.archived ? "border-gray-300 opacity-75" : "border-gray-200"
+                    )}
                   >
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex-1">
                         <div className="flex items-center space-x-2 mb-1">
-                          <h4 className="font-medium text-gray-900">{project.name}</h4>
+                          <h4 className="font-medium text-black">{project.name}</h4>
                           {project.priority && (
                             <span className={cn(
                               "text-xs px-2 py-0.5 rounded",
@@ -1313,6 +1509,9 @@ export default function TeamsPage() {
                             )}>
                               {project.priority}
                             </span>
+                          )}
+                          {project.archived && (
+                            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">Archived</span>
                           )}
                         </div>
                         <p className="text-sm text-gray-500 mt-1">{project.description}</p>
@@ -1326,15 +1525,26 @@ export default function TeamsPage() {
                           </div>
                         )}
                       </div>
-                      <span className={cn(
-                        "text-xs px-2 py-1 rounded-full",
-                        project.status === 'Completed' ? "bg-green-100 text-green-800" :
-                        project.status === 'In Progress' ? "bg-blue-100 text-blue-800" :
-                        project.status === 'On Hold' ? "bg-yellow-100 text-yellow-800" :
-                        "bg-gray-100 text-gray-800"
-                      )}>
-                        {project.status}
-                      </span>
+                      <div className="flex items-center space-x-2">
+                        <span className={cn(
+                          "text-xs px-2 py-1 rounded-full",
+                          project.status === 'Completed' ? "bg-green-100 text-green-800" :
+                          project.status === 'In Progress' ? "bg-blue-100 text-blue-800" :
+                          project.status === 'On Hold' ? "bg-yellow-100 text-yellow-800" :
+                          "bg-gray-100 text-gray-800"
+                        )}>
+                          {project.status}
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            project.archived ? handleUnarchiveProject(project.id) : handleArchiveProject(project.id);
+                          }}
+                          className="text-xs text-gray-500 hover:text-gray-700"
+                        >
+                          {project.archived ? 'Unarchive' : 'Archive'}
+                        </button>
+                      </div>
                     </div>
                     <div className="mt-3">
                       <div className="flex items-center justify-between text-sm text-gray-500 mb-1">
@@ -1361,45 +1571,45 @@ export default function TeamsPage() {
 
             <div className={cn("fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]", showCreateProjectModal ? "flex" : "hidden")}>
               <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
-                <h3 className="text-xl font-semibold text-gray-900 mb-4">
+                <h3 className="text-xl font-semibold text-black mb-4">
                   Add Project to {(viewTeamDetail as any).name}
                 </h3>
 
                 <form onSubmit={handleCreateProject} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                    <label className="block text-sm font-medium text-black mb-2">
                       Project Name
                     </label>
                     <input
                       type="text"
                       value={newProjectName}
                       onChange={(e) => setNewProjectName(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-black"
                       required
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                    <label className="block text-sm font-medium text-black mb-2">
                       Description
                     </label>
                     <textarea
                       value={newProjectDescription}
                       onChange={(e) => setNewProjectDescription(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-black"
                       rows={3}
                       required
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                    <label className="block text-sm font-medium text-black mb-2">
                       Priority
                     </label>
                     <select
                       value={projectPriority}
                       onChange={(e) => setProjectPriority(e.target.value as 'High' | 'Medium' | 'Low')}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-black"
                     >
                       <option value="High">High</option>
                       <option value="Medium">Medium</option>
@@ -1408,7 +1618,7 @@ export default function TeamsPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                    <label className="block text-sm font-medium text-black mb-2">
                       Tags
                     </label>
                     <div className="flex flex-wrap gap-2 mb-2">
@@ -1432,7 +1642,7 @@ export default function TeamsPage() {
                         value={newTag}
                         onChange={(e) => setNewTag(e.target.value)}
                         onKeyPress={(e) => e.key === 'Enter' && addTag()}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 text-sm"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-black text-sm"
                       />
                       <button
                         type="button"
@@ -1445,7 +1655,7 @@ export default function TeamsPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                    <label className="block text-sm font-medium text-black mb-2">
                       Use Template
                     </label>
                     <select
@@ -1454,7 +1664,7 @@ export default function TeamsPage() {
                         const template = projectTemplates.find(t => t.id === e.target.value);
                         if (template) applyTemplate(template);
                       }}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-black"
                     >
                       <option value="">Select a template...</option>
                       {projectTemplates.map((template) => (
@@ -1464,32 +1674,32 @@ export default function TeamsPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                    <label className="block text-sm font-medium text-black mb-2">
                       Due Date
                     </label>
                     <input
                       type="date"
                       value={newProjectDueDate}
                       onChange={(e) => setNewProjectDueDate(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-black"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                    <label className="block text-sm font-medium text-black mb-2">
                       Details
                     </label>
                     <textarea
                       value={newProjectDetails}
                       onChange={(e) => setNewProjectDetails(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-black"
                       rows={4}
                       placeholder="Enter project details, requirements, specifications..."
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                    <label className="block text-sm font-medium text-black mb-2">
                       Roles & Responsibilities
                     </label>
                     <div className="space-y-2">
@@ -1498,7 +1708,7 @@ export default function TeamsPage() {
                           <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center flex-shrink-0">
                             <span className="text-sm font-medium text-gray-600">{member.name.charAt(0)}</span>
                           </div>
-                          <span className="text-sm text-gray-900 flex-1">{member.name}</span>
+                          <span className="text-sm text-black flex-1">{member.name}</span>
                           <input
                             type="text"
                             placeholder="Project role..."
@@ -1507,7 +1717,7 @@ export default function TeamsPage() {
                               ...prev,
                               [member.id]: e.target.value
                             }))}
-                            className="flex-1 px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 text-sm"
+                            className="flex-1 px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-black text-sm"
                           />
                         </div>
                       ))}
@@ -1515,7 +1725,7 @@ export default function TeamsPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">
+                    <label className="block text-sm font-medium text-black mb-2">
                       Project Milestones
                     </label>
                     <div className="mb-3">
@@ -1533,7 +1743,7 @@ export default function TeamsPage() {
                         <div key={index} className="flex items-center space-x-2 bg-gray-50 p-2 rounded-lg">
                           <div className="flex-1">
                             <div className="flex items-center space-x-2">
-                              <p className="text-sm font-medium text-gray-900">{milestone.name}</p>
+                              <p className="text-sm font-medium text-black">{milestone.name}</p>
                               {milestone.priority && (
                                 <span className={cn(
                                   "text-xs px-1.5 py-0.5 rounded",
@@ -1564,26 +1774,26 @@ export default function TeamsPage() {
                         placeholder="Milestone name..."
                         value={newMilestoneName}
                         onChange={(e) => setNewMilestoneName(e.target.value)}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 text-sm"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-black text-sm"
                       />
                       <input
                         type="text"
                         placeholder="Description (optional)..."
                         value={newMilestoneDescription}
                         onChange={(e) => setNewMilestoneDescription(e.target.value)}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 text-sm"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-black text-sm"
                       />
                       <input
                         type="date"
                         placeholder="Due date..."
                         value={newMilestoneDueDate}
                         onChange={(e) => setNewMilestoneDueDate(e.target.value)}
-                        className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 text-sm"
+                        className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-black text-sm"
                       />
                       <select
                         value={newMilestonePriority}
                         onChange={(e) => setNewMilestonePriority(e.target.value as 'High' | 'Medium' | 'Low')}
-                        className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 text-sm"
+                        className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-black text-sm"
                       >
                         <option value="High">High</option>
                         <option value="Medium">Medium</option>
@@ -1621,6 +1831,20 @@ export default function TeamsPage() {
                         </div>
                       </div>
                     )}
+                    <div className="mt-2">
+                      <label className="block text-xs text-gray-500 mb-1">Category:</label>
+                      <select
+                        value={newMilestoneCategory}
+                        onChange={(e) => setNewMilestoneCategory(e.target.value as 'Design' | 'Development' | 'Testing' | 'Deployment' | 'Documentation')}
+                        className="px-2 py-1 border border-gray-300 rounded text-sm"
+                      >
+                        <option value="Design">Design</option>
+                        <option value="Development">Development</option>
+                        <option value="Testing">Testing</option>
+                        <option value="Deployment">Deployment</option>
+                        <option value="Documentation">Documentation</option>
+                      </select>
+                    </div>
                   </div>
 
                   <div className="flex space-x-3 pt-2">
@@ -1638,7 +1862,7 @@ export default function TeamsPage() {
                         setNewMilestoneName('');
                         setNewMilestoneDescription('');
                       }}
-                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition text-gray-900"
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition text-black"
                     >
                       Cancel
                     </button>
@@ -1662,7 +1886,7 @@ export default function TeamsPage() {
     <DashboardLayout activeTab="teams">
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-bold text-gray-900">Teams</h2>
+          <h2 className="text-2xl font-bold text-black">Teams</h2>
           {(user?.role === 'ADMIN' || user?.role === 'DIRECTOR' || user?.role === 'PROJECT_MANAGER' || user?.role === 'LEAD_ENGINEER') && (
             <button
               onClick={() => setShowCreateModal(true)}
@@ -1683,7 +1907,7 @@ export default function TeamsPage() {
             >
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">
+                  <h3 className="text-lg font-semibold text-black">
                     {team.name}
                   </h3>
                   {team.description && (
@@ -1706,7 +1930,7 @@ export default function TeamsPage() {
                     setSelectedTeam(team);
                     setShowAddMemberModal(true);
                   }}
-                  className="mt-4 w-full flex items-center justify-center space-x-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg py-2 hover:bg-gray-50 transition"
+                  className="mt-4 w-full flex items-center justify-center space-x-2 text-sm text-gray-600 hover:text-black border border-gray-200 rounded-lg py-2 hover:bg-gray-50 transition"
                 >
                   <UserPlus className="w-4 h-4" />
                   <span>Add Member</span>
@@ -1719,32 +1943,32 @@ export default function TeamsPage() {
         {showCreateModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-              <h3 className="text-xl font-semibold text-gray-900 mb-4">
+              <h3 className="text-xl font-semibold text-black mb-4">
                 Create New Team
               </h3>
 
               <form onSubmit={handleCreateTeam} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                  <label className="block text-sm font-medium text-black mb-2">
                     Team Name
                   </label>
                   <input
                     type="text"
                     value={newTeamName}
                     onChange={(e) => setNewTeamName(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-black"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                  <label className="block text-sm font-medium text-black mb-2">
                     Description (optional)
                   </label>
                   <textarea
                     value={newTeamDescription}
                     onChange={(e) => setNewTeamDescription(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-black"
                     rows={3}
                   />
                 </div>
@@ -1753,7 +1977,7 @@ export default function TeamsPage() {
                   <button
                     type="button"
                     onClick={() => setShowCreateModal(false)}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition text-gray-900"
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition text-black"
                   >
                     Cancel
                   </button>
@@ -1772,20 +1996,20 @@ export default function TeamsPage() {
         {showAddMemberModal && selectedTeam && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-              <h3 className="text-xl font-semibold text-gray-900 mb-4">
+              <h3 className="text-xl font-semibold text-black mb-4">
                 Add Member to {selectedTeam.name}
               </h3>
 
               <form onSubmit={handleAddMember} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                  <label className="block text-sm font-medium text-black mb-2">
                     User Email
                   </label>
                   <input
                     type="email"
                     value={memberEmail}
                     onChange={(e) => setMemberEmail(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-black"
                     placeholder="user@example.com"
                     required
                   />
@@ -1799,7 +2023,7 @@ export default function TeamsPage() {
                       setMemberEmail('');
                       setSelectedTeam(null);
                     }}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition text-gray-900"
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition text-black"
                   >
                     Cancel
                   </button>

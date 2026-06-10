@@ -97,10 +97,22 @@ export default function ConnectionsPage() {
   ];
 
   useEffect(() => {
-    // Load mock data
-    setConnections(mockConnections);
+    // Load from localStorage or use mock data
+    const savedConnections = localStorage.getItem('connections');
+    if (savedConnections) {
+      setConnections(JSON.parse(savedConnections));
+    } else {
+      setConnections(mockConnections);
+    }
     setLoading(false);
   }, []);
+
+  // Save to localStorage whenever connections change
+  useEffect(() => {
+    if (connections.length > 0) {
+      localStorage.setItem('connections', JSON.stringify(connections));
+    }
+  }, [connections]);
 
   const loadConnections = () => {};
   const searchUsers = (query: string) => {
@@ -139,6 +151,10 @@ export default function ConnectionsPage() {
   const deleteConnection = (connectionId: string) => {
     setConnections(connections.filter(c => c.id !== connectionId));
     showToast('Connection removed', 'success');
+  };
+  const cancelConnectionRequest = (connectionId: string) => {
+    setConnections(connections.filter(c => c.id !== connectionId));
+    showToast('Connection request cancelled', 'success');
   };
 
   const pendingRequests = connections.filter(
@@ -185,7 +201,7 @@ export default function ConnectionsPage() {
                   searchUsers(e.target.value);
                 }}
                 placeholder="Search by name or email..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-black"
               />
             </div>
 
@@ -292,7 +308,15 @@ export default function ConnectionsPage() {
                       </p>
                     </div>
                   </div>
-                  <span className="text-sm text-yellow-600">Pending</span>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm text-yellow-600">Pending</span>
+                    <button
+                      onClick={() => cancelConnectionRequest(connection.id)}
+                      className="text-sm text-red-600 hover:text-red-700"
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

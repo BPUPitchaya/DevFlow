@@ -12,6 +12,7 @@ interface AuthState {
   user: User | null;
   token: string | null;
   darkMode: boolean;
+  isDemo: boolean;
   setAuth: (user: User, token: string) => void;
   logout: () => void;
   toggleDarkMode: () => void;
@@ -34,13 +35,14 @@ export const useAuthStore = create<AuthState>((set) => ({
   user: demoUsers['u1'], // Default to lead engineer
   token: 'demo-token',
   darkMode: false,
-  setAuth: (user, token) => set({ user, token }),
-  logout: () => set({ user: null, token: null }),
+  isDemo: true, // Default to demo mode
+  setAuth: (user, token) => set({ user, token, isDemo: false }), // Real user sets isDemo to false
+  logout: () => set({ user: null, token: null, isDemo: false }),
   toggleDarkMode: () => set((state) => ({ darkMode: !state.darkMode })),
   switchUser: (userId: string) => {
     const newUser = demoUsers[userId];
     if (newUser) {
-      set({ user: newUser });
+      set({ user: newUser, isDemo: true }); // Demo user sets isDemo to true
     }
   },
 }));

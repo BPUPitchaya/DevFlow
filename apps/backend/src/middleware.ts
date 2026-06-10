@@ -7,12 +7,27 @@ export const config = {
 };
 
 export function middleware(request: NextRequest) {
+  // Add CORS headers
+  const response = NextResponse.next();
+
+  response.headers.set('Access-Control-Allow-Origin', '*');
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  // Handle preflight requests
+  if (request.method === 'OPTIONS') {
+    return new NextResponse(null, {
+      status: 200,
+      headers: response.headers,
+    });
+  }
+
   // Skip authentication for public routes
   const publicPaths = ['/api/auth/login', '/api/auth/register'];
   const { pathname } = request.nextUrl;
 
   if (publicPaths.some(path => pathname.startsWith(path))) {
-    return NextResponse.next();
+    return response;
   }
 
   const token = request.headers.get('authorization')?.replace('Bearer ', '');

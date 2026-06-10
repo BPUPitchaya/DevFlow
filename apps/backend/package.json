@@ -9,7 +9,11 @@
     "lint": "next lint",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "prisma:seed": "tsx prisma/seed.ts"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.7.0",
@@ -28,6 +32,7 @@
     "prisma": "^5.7.0",
     "typescript": "^5.3.3",
     "eslint": "^8.56.0",
-    "eslint-config-next": "^14.0.4"
+    "eslint-config-next": "^14.0.4",
+    "tsx": "^4.7.0"
   }
 }

@@ -32,6 +32,12 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="teams"
+        options={{
+          title: 'Teams',
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',

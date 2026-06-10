@@ -9,10 +9,16 @@ import { cn } from '@/lib/utils';
 export default function LoginPage() {
   const router = useRouter();
   const setAuth = useAuthStore((state) => state.setAuth);
+  const switchUser = useAuthStore((state) => state.switchUser);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const handleDemoLogin = () => {
+    switchUser('u1'); // Load demo user
+    router.push('/dashboard');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,7 +28,7 @@ export default function LoginPage() {
     try {
       const response = await authApi.login(email, password);
       setAuth(response.data.user, response.data.token);
-      router.push('/dashboard/feed');
+      router.push('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Login failed');
     } finally {
@@ -34,7 +40,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">DevFlow</h1>
+          <h1 className="text-3xl font-bold text-black">DevFlow</h1>
           <p className="text-gray-600 mt-2">Team Velocity Platform</p>
         </div>
 
@@ -47,7 +53,7 @@ export default function LoginPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-gray-900"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-black"
               placeholder="you@example.com"
               required
             />
@@ -61,7 +67,7 @@ export default function LoginPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-gray-900"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-black"
               placeholder="••••••••"
               required
             />
@@ -94,6 +100,18 @@ export default function LoginPage() {
             Sign up
           </button>
         </p>
+
+        <div className="mt-4 pt-4 border-t border-gray-200">
+          <button
+            onClick={handleDemoLogin}
+            className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium transition hover:bg-blue-700"
+          >
+            Try Demo Account
+          </button>
+          <p className="text-center text-gray-500 mt-2 text-xs">
+            Explore the app with sample data
+          </p>
+        </div>
       </div>
     </div>
   );

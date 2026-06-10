@@ -9,12 +9,18 @@ import { cn } from '@/lib/utils';
 export default function RegisterPage() {
   const router = useRouter();
   const setAuth = useAuthStore((state) => state.setAuth);
+  const switchUser = useAuthStore((state) => state.switchUser);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('ENGINEER');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const handleDemoLogin = () => {
+    switchUser('u1'); // Load demo user
+    router.push('/dashboard');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,7 +30,7 @@ export default function RegisterPage() {
     try {
       const response = await authApi.register({ name, email, password, role });
       setAuth(response.data.user, response.data.token);
-      router.push('/dashboard/feed');
+      router.push('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Registration failed');
     } finally {
@@ -36,7 +42,7 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">DevFlow</h1>
+          <h1 className="text-3xl font-bold text-black">DevFlow</h1>
           <p className="text-gray-600 mt-2">Create your account</p>
         </div>
 
@@ -49,7 +55,7 @@ export default function RegisterPage() {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-gray-900"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-black"
               placeholder="John Doe"
               required
             />
@@ -63,7 +69,7 @@ export default function RegisterPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-gray-900"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-black"
               placeholder="you@example.com"
               required
             />
@@ -77,7 +83,7 @@ export default function RegisterPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-gray-900"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-black"
               placeholder="••••••••"
               required
               minLength={6}
@@ -91,7 +97,7 @@ export default function RegisterPage() {
             <select
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-gray-900"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-black"
               required
             >
               <option value="ENGINEER">Engineer</option>
@@ -128,6 +134,18 @@ export default function RegisterPage() {
             Sign in
           </button>
         </p>
+
+        <div className="mt-4 pt-4 border-t border-gray-200">
+          <button
+            onClick={handleDemoLogin}
+            className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium transition hover:bg-blue-700"
+          >
+            Try Demo Account
+          </button>
+          <p className="text-center text-gray-500 mt-2 text-xs">
+            Explore the app with sample data
+          </p>
+        </div>
       </div>
     </div>
   );
